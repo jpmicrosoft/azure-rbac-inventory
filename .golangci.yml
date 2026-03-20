@@ -1,29 +1,35 @@
+version: "2"
+
 linters:
+  default: none
   enable:
     - govet
     - errcheck
     - staticcheck
     - unused
-    - gosimple
     - ineffassign
     - unparam
     - gocritic
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-    disabled-checks:
-      - commentFormatting
-      - hugeParam
-  unparam:
-    check-exported: false
+  settings:
+    errcheck:
+      check-type-assertions: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+      disabled-checks:
+        - commentFormatting
+        - hugeParam
+    unparam:
+      check-exported: false
 
-issues:
-  exclude-dirs:
-    - dist
-  max-issues-per-linter: 50
-  max-same-issues: 5
+  exclusions:
+    paths:
+      - dist
+    rules:
+      - linters:
+          - lll
+        source: "^//go:generate "
+    max-issues-per-linter: 50
+    max-same-issues: 5
