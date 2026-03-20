@@ -843,3 +843,57 @@ func TestSanitizeCSVCell(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Security regression: escapeMarkdown covers all metacharacters (F-16)
+// ---------------------------------------------------------------------------
+
+func TestEscapeMarkdown_AllMetacharacters(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"normal text", "normal text"},
+		{"pipe|char", `pipe\|char`},
+		{"[link](url)", `\[link\]\(url\)`},
+		{"*bold*", `\*bold\*`},
+		{"_italic_", `\_italic\_`},
+		{"`code`", "\\`code\\`"},
+		{"# heading", `\# heading`},
+		{"> quote", `\> quote`},
+		{"!image", `\!image`},
+		// Combined injection attempt
+		{"[Click here](https://evil.com)", `\[Click here\]\(https://evil.com\)`},
+		{"**EMERGENCY**", `\*\*EMERGENCY\*\*`},
+	}
+	for _, tt := range tests {
+		got := escapeMarkdown(tt.input)
+		if got != tt.want {
+			t.Errorf("escapeMarkdown(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestMarkdownFormatter_EscapesWarnings(t *testing.T) {
+	rpt := &report.Report{
+		Identity: &identity.Identity{
+			DisplayName: "Test",
+			ObjectID:    "00000000-0000-0000-0000-000000000001",
+			Type:        "User",
+		},
+		Cloud:    "AzureCloud",
+		Warnings: []string{"[click](http://evil.com) injected warning"},
+	}
+	f := &MarkdownFormatter{}
+	data, err := f.FormatReport(rpt)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	md := string(data)
+	if strings.Contains(md, "[click](http://evil.com)") {
+		t.Error("markdown warning should escape link syntax to prevent content injection")
+	}
+	if !strings.Contains(md, `\[click\]`) {
+		t.Error("markdown warning should contain escaped brackets")
+	}
+}

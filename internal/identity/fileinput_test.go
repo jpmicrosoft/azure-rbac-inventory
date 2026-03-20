@@ -645,3 +645,32 @@ func TestParseInputFile_ExceedsMaxEntries(t *testing.T) {
 		t.Errorf("error should mention exceeding maximum, got: %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Security regression: file size pre-check (F-17)
+// ---------------------------------------------------------------------------
+
+func TestParseInputFile_ExceedsMaxFileSize(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "huge.txt")
+
+	// Create a file just over maxInputFileBytes (10 MB + 1 byte)
+	data := make([]byte, maxInputFileBytes+1)
+	for i := range data {
+		data[i] = 'x'
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	_, err := ParseInputFile(path)
+	if err == nil {
+		t.Fatal("expected error when file exceeds maxInputFileBytes, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeding maximum") {
+		t.Errorf("error should mention exceeding maximum, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "10 MB") {
+		t.Errorf("error should mention 10 MB limit, got: %v", err)
+	}
+}
