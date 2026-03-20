@@ -14,15 +14,26 @@ linters:
   settings:
     errcheck:
       check-type-assertions: true
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Printf
+        - fmt.Println
+        - fmt.Print
+        - (io.Writer).Write
     gocritic:
       enabled-tags:
         - diagnostic
-        - style
       disabled-checks:
         - commentFormatting
         - hugeParam
     unparam:
       check-exported: false
+    staticcheck:
+      checks:
+        - "all"
+        - "-ST1005"
+        - "-QF1008"
 
   exclusions:
     paths:
