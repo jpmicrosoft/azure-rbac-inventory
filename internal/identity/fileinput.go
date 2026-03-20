@@ -10,6 +10,9 @@ import (
 	"strings"
 )
 
+// maxInputEntries is the maximum number of entries allowed in an input file.
+const maxInputEntries = 10000
+
 // InputEntry represents a single identity input with optional metadata.
 type InputEntry struct {
 	ID    string `json:"id"`    // Required: UUID, app ID, display name, or wildcard pattern
@@ -78,6 +81,9 @@ func parseTextInput(path string) ([]InputEntry, error) {
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("no valid entries found in file %q", path)
 	}
+	if len(entries) > maxInputEntries {
+		return nil, fmt.Errorf("file %q contains %d entries, exceeding maximum of %d", path, len(entries), maxInputEntries)
+	}
 	return entries, nil
 }
 
@@ -138,6 +144,9 @@ func parseCSVInput(path string) ([]InputEntry, error) {
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("no valid data rows found in CSV file %q", path)
 	}
+	if len(entries) > maxInputEntries {
+		return nil, fmt.Errorf("CSV file %q contains %d entries, exceeding maximum of %d", path, len(entries), maxInputEntries)
+	}
 	return entries, nil
 }
 
@@ -170,6 +179,10 @@ func parseJSONInput(path string) ([]InputEntry, error) {
 
 	if len(wrapper.Identities) == 0 {
 		return nil, fmt.Errorf("JSON file %q: \"identities\" key is missing or empty", path)
+	}
+
+	if len(wrapper.Identities) > maxInputEntries {
+		return nil, fmt.Errorf("JSON file %q contains %d entries, exceeding maximum of %d", path, len(wrapper.Identities), maxInputEntries)
 	}
 
 	var entries []InputEntry

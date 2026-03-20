@@ -169,7 +169,11 @@ func Run(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environm
 		fmt.Fprint(os.Stderr, "Querying RBAC for group memberships...\n")
 
 		grpG, grpCtx := errgroup.WithContext(ctx)
-		grpG.SetLimit(10)
+		concLimit := cfg.Concurrency
+		if concLimit <= 0 {
+			concLimit = 10
+		}
+		grpG.SetLimit(concLimit)
 
 		var grpMu sync.Mutex
 		var groupRBAC []rbac.RoleAssignment

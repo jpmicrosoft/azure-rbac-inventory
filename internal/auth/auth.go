@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -12,10 +13,11 @@ import (
 // ValidAuthMethods lists the supported authentication method names.
 var ValidAuthMethods = []string{"default", "cli", "interactive", "device-code", "env", "managed-identity"}
 
-// newCache creates a persistent token cache, falling back to nil on error.
+// newCache creates a persistent token cache, falling back to an empty cache on error.
 func newCache() azidentity.Cache {
 	c, err := cache.New(nil)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: token cache unavailable (%v), tokens will not be persisted\n", err)
 		return azidentity.Cache{}
 	}
 	return c

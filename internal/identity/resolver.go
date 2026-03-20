@@ -114,7 +114,7 @@ func (r *Resolver) resolveByObjectID(ctx context.Context, objectID string) (*Ide
 
 func (r *Resolver) resolveByAppID(ctx context.Context, appID string) (*Identity, error) {
 	query := url.Values{}
-	query.Set("$filter", fmt.Sprintf("appId eq '%s'", appID))
+	query.Set("$filter", fmt.Sprintf("appId eq '%s'", escapeOData(appID)))
 
 	body, err := r.graphClient.DoRequest(ctx, "/v1.0/servicePrincipals", query)
 	if err != nil {

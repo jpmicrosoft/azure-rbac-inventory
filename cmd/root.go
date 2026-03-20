@@ -53,7 +53,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&exportFlag, "export", "", "Export to file (format auto-detected from extension: .csv/.html/.md/.xlsx/.json)")
 	rootCmd.PersistentFlags().BoolVar(&perIdentityFlag, "per-identity", false, "Separate output/file per identity when processing multiple")
 	rootCmd.PersistentFlags().IntVar(&maxResultsFlag, "max-results", 50, "Max identities to return from pattern search")
-	rootCmd.PersistentFlags().IntVar(&concurrencyFlag, "concurrency", 5, "Max concurrent identity checks for batch processing")
+	rootCmd.PersistentFlags().IntVar(&concurrencyFlag, "concurrency", 10, "Max concurrent identity checks for batch processing")
 }
 
 // SetVersion sets the version string for the CLI.

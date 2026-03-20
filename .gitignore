@@ -9,7 +9,11 @@ __debug_bin*
 msal_token_cache*
 
 # Report exports (contain sensitive RBAC data)
-results.json
+*.json
+!go.mod
+!go.sum
+!examples/*.json
+*.csv
 *.html
 *.xlsx
 

@@ -48,6 +48,10 @@ func init() {
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
+	if maxResultsFlag <= 0 {
+		return fmt.Errorf("--max-results must be a positive integer, got %d", maxResultsFlag)
+	}
+
 	// Collect input identities from positional arg or --file
 	var entries []identity.InputEntry
 	if fileFlag != "" {

@@ -92,21 +92,27 @@ func TestGetEnvironment_InvalidName(t *testing.T) {
 	}
 }
 
-func TestGetEnvironment_CaseSensitive(t *testing.T) {
-	// The function uses an exact-match switch; lowercase should not match.
-	caseMismatches := []string{
-		"azurecloud",
-		"AZURECLOUD",
-		"azureCloud",
-		"azureusgovernment",
-		"azurechinacloud",
+func TestGetEnvironment_CaseInsensitive(t *testing.T) {
+	// The function should match cloud names case-insensitively.
+	caseVariants := []struct {
+		input    string
+		wantName string
+	}{
+		{"azurecloud", "AzureCloud"},
+		{"AZURECLOUD", "AzureCloud"},
+		{"azureCloud", "AzureCloud"},
+		{"azureusgovernment", "AzureUSGovernment"},
+		{"azurechinacloud", "AzureChinaCloud"},
 	}
 
-	for _, name := range caseMismatches {
-		t.Run(name, func(t *testing.T) {
-			_, ok := GetEnvironment(name)
-			if ok {
-				t.Errorf("GetEnvironment(%q) returned ok=true, want false (case-sensitive)", name)
+	for _, tc := range caseVariants {
+		t.Run(tc.input, func(t *testing.T) {
+			env, ok := GetEnvironment(tc.input)
+			if !ok {
+				t.Errorf("GetEnvironment(%q) returned ok=false, want true (case-insensitive)", tc.input)
+			}
+			if env.Name != tc.wantName {
+				t.Errorf("GetEnvironment(%q).Name = %q, want %q", tc.input, env.Name, tc.wantName)
 			}
 		})
 	}

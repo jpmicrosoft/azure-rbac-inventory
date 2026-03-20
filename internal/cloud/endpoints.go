@@ -1,6 +1,8 @@
 package cloud
 
 import (
+	"strings"
+
 	azcloud "github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 )
 
@@ -53,14 +55,14 @@ var (
 	ValidCloudNames = []string{"AzureCloud", "AzureUSGovernment", "AzureChinaCloud"}
 )
 
-// GetEnvironment returns the cloud environment by name.
+// GetEnvironment returns the cloud environment by name (case-insensitive).
 func GetEnvironment(name string) (Environment, bool) {
-	switch name {
-	case "AzureCloud":
+	switch strings.ToLower(name) {
+	case "azurecloud":
 		return AzureCloud, true
-	case "AzureUSGovernment":
+	case "azureusgovernment":
 		return AzureUSGovernment, true
-	case "AzureChinaCloud":
+	case "azurechinacloud":
 		return AzureChinaCloud, true
 	default:
 		return Environment{}, false

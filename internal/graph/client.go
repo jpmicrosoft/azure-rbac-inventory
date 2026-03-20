@@ -65,15 +65,15 @@ func (c *Client) DoRequestWithHeaders(ctx context.Context, path string, query ur
 		reqURL += "?" + query.Encode()
 	}
 
-	token, err := c.cred.GetToken(ctx, policy.TokenRequestOptions{
-		Scopes: []string{c.env.GraphScope},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Graph token: %w", err)
-	}
-
 	var resp *http.Response
 	for attempt := 0; attempt < maxRetries; attempt++ {
+		token, err := c.cred.GetToken(ctx, policy.TokenRequestOptions{
+			Scopes: []string{c.env.GraphScope},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Graph token: %w", err)
+		}
+
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
