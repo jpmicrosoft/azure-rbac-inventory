@@ -261,7 +261,7 @@ Azure RBAC Inventory uses **interactive browser authentication** by default. On 
 | `device-code` | Device code flow | For environments without a browser (SSH, containers) |
 | `environment` | Service principal (env vars) | CI/CD pipelines — uses `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` |
 | `managed-identity` | Azure Managed Identity | Azure-hosted runners (Azure DevOps agents, AKS, Azure VMs) |
-| `azurecli` | Azure CLI credential | Pipelines with `az login` (GitHub Actions `azure/login`, Azure DevOps service connections) |
+| `azurecli` | Azure CLI credential | CI/CD pipelines using service principal `az login` (GitHub Actions `azure/login`, Azure DevOps service connections) |
 
 ```bash
 # Default: interactive browser login
@@ -279,17 +279,14 @@ azure-rbac-inventory check <id> --auth environment --output json
 # CI/CD: managed identity (Azure-hosted runners)
 azure-rbac-inventory check <id> --auth managed-identity --output json
 
-# CI/CD: after az login (must include Graph scope)
-az login --scope https://graph.microsoft.com/.default
+# CI/CD: service principal az login (gets both Graph + ARM scopes)
+az login --service-principal -u <app-id> -p <secret> --tenant <tenant-id>
 azure-rbac-inventory check <id> --auth azurecli --output json
 ```
 
 > **Tip:** For interactive auth, the tool requires delegated permissions — consent to `Directory.Read.All` when prompted. For CI/CD auth methods (`environment`, `managed-identity`, `azurecli`), use **application permissions** granted via app registration in Entra ID. For access package queries (`--include-access-packages`), `EntitlementManagement.Read.All` is also needed.
 
-> **Important:** When using `--auth azurecli`, the Azure CLI session must have Graph API access. If you see `InteractionRequired` errors, re-login with:
-> ```bash
-> az login --scope https://graph.microsoft.com/.default
-> ```
+> **Important:** `--auth azurecli` is designed for **service principal** login in CI/CD pipelines. Interactive `az login` sessions scope to a single resource and may fail when the tool needs both Graph and ARM tokens. For interactive use, prefer `--auth interactive` (the default).
 
 ### CI/CD Pipeline Examples
 

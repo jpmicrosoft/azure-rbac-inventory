@@ -106,7 +106,11 @@ func PreAuthenticate(ctx context.Context, cred azcore.TokenCredential, env cloud
 	})
 	if err != nil {
 		if authMethod == "azurecli" {
-			return fmt.Errorf("failed to acquire Graph token: %w\n\nHint: Azure CLI needs Graph API access. Run:\n  az login --scope %s", err, env.GraphScope)
+			return fmt.Errorf("failed to acquire Graph token via Azure CLI: %w\n\n"+
+				"The Azure CLI session does not have Graph API access.\n"+
+				"For service principals (CI/CD), log in with:\n"+
+				"  az login --service-principal -u <app-id> -p <secret> --tenant <tenant-id>\n\n"+
+				"For interactive use, consider --auth interactive instead of --auth azurecli.", err)
 		}
 		return fmt.Errorf("failed to acquire Graph token: %w", err)
 	}
@@ -118,7 +122,11 @@ func PreAuthenticate(ctx context.Context, cred azcore.TokenCredential, env cloud
 	})
 	if err != nil {
 		if authMethod == "azurecli" {
-			return fmt.Errorf("failed to acquire ARM token: %w\n\nHint: Azure CLI needs ARM access. Run:\n  az login --scope %s", err, env.ARMScope)
+			return fmt.Errorf("failed to acquire ARM token via Azure CLI: %w\n\n"+
+				"The Azure CLI session does not have ARM access.\n"+
+				"For service principals (CI/CD), log in with:\n"+
+				"  az login --service-principal -u <app-id> -p <secret> --tenant <tenant-id>\n\n"+
+				"For interactive use, consider --auth interactive instead of --auth azurecli.", err)
 		}
 		return fmt.Errorf("failed to acquire ARM token: %w", err)
 	}
