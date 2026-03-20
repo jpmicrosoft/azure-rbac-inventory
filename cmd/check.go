@@ -28,8 +28,8 @@ and group memberships.
 Use --include-access-packages to also query access package assignments and
 pending requests (requires EntitlementManagement.Read.All permission).
 Use --file to supply a list of identity IDs or patterns from a file (one per line).
-Use --include-groups to also query RBAC role assignments inherited through
-transitive group memberships.`,
+Use --include-group-rbac to also query RBAC role assignments inherited through
+transitive group memberships (group memberships are always listed regardless).`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 && fileFlag == "" {
 			return fmt.Errorf("requires either an identity ID/pattern argument or --file flag")
@@ -143,7 +143,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		Cloud:                 cloudFlag,
 		TenantID:              tenantFlag,
 		Subscriptions:         checker.ParseSubscriptions(subscriptionsFlag),
-		IncludeGroups:         includeGroupsFlag,
+		IncludeGroups:         includeGroupRBACFlag,
 		IncludeAccessPackages: includeAccessPackagesFlag,
 		Verbose:               verboseFlag,
 		OutputFormat:          outputFlag,

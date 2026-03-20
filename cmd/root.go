@@ -13,7 +13,7 @@ var (
 	outputFlag                string
 	jsonFileFlag              string
 	subscriptionsFlag         string
-	includeGroupsFlag         bool
+	includeGroupRBACFlag      bool
 	includeAccessPackagesFlag bool
 	verboseFlag               bool
 	authMethodFlag            string
@@ -46,7 +46,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", "table", "Output format (table|json|csv|markdown)")
 	rootCmd.PersistentFlags().StringVar(&jsonFileFlag, "json-file", "", "Export results to JSON file")
 	rootCmd.PersistentFlags().StringVar(&subscriptionsFlag, "subscriptions", "", "Comma-separated subscription IDs (default: all accessible)")
-	rootCmd.PersistentFlags().BoolVar(&includeGroupsFlag, "include-groups", false, "Include transitive group membership RBAC assignments")
+	rootCmd.PersistentFlags().BoolVar(&includeGroupRBACFlag, "include-group-rbac", false, "Also query RBAC role assignments inherited through group memberships (group list always shown)")
 	rootCmd.PersistentFlags().BoolVar(&includeAccessPackagesFlag, "include-access-packages", false, "Query access package assignments and requests (requires EntitlementManagement.Read.All)")
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "Verbose output")
 	rootCmd.PersistentFlags().StringVar(&authMethodFlag, "auth", "interactive", "Authentication method (interactive|device-code)")

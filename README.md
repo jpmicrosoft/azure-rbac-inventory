@@ -12,7 +12,7 @@ Supports **Azure Commercial** and **Azure Government** clouds.
 - **Access Packages** — Optionally queries Identity Governance entitlement management for all assignment states (Delivered, Delivering, Pending Approval, Expired, etc.) with `--include-access-packages`
 - **Access Package Requests** — Shows pending, approved, and denied access package requests (with `--include-access-packages`)
 - **Group Memberships** — Lists direct and transitive group memberships
-- **Inherited RBAC** — Optionally queries RBAC assignments inherited through group memberships (`--include-groups`)
+- **Inherited RBAC** — Optionally queries RBAC assignments inherited through group memberships (`--include-group-rbac`). Note: group memberships are always listed in the report; this flag adds the additional RBAC lookups per group.
 - **Pattern Search** — Search by display name, SPN name, or wildcard pattern instead of requiring an exact ID
 - **File Input** — Batch-check multiple identities from a text file
 - **Export Formats** — Export results to CSV, HTML, Markdown, XLSX, or JSON files
@@ -61,7 +61,7 @@ The identity running this tool needs these permissions at minimum:
 ./azure-rbac-inventory check <object-id> --export report.json
 
 # Include RBAC inherited through group memberships
-./azure-rbac-inventory check <object-id> --include-groups
+./azure-rbac-inventory check <object-id> --include-group-rbac
 
 # Include access package assignments and requests
 ./azure-rbac-inventory check <object-id> --include-access-packages
@@ -90,7 +90,7 @@ Global Flags:
       --auth string            Authentication method (interactive|device-code) (default "interactive")
   -o, --output string          Output format (table|json|csv|markdown) (default "table")
       --subscriptions string   Comma-separated subscription IDs (default: all accessible)
-      --include-groups         Include transitive group membership RBAC assignments
+      --include-group-rbac     Also query RBAC role assignments inherited through group memberships (group list always shown)
       --include-access-packages  Query access package assignments and requests (requires EntitlementManagement.Read.All)
       --file string            Read identities from file (one per line)
       --type string            Filter identity type (spn|user|group|managed-identity|app|all) (default "all")
@@ -237,7 +237,7 @@ azure-rbac-inventory check <id> --output markdown
 | `--cloud` | Azure cloud name | `AzureCloud` |
 | `--tenant` | Tenant ID | auto-detected |
 | `--subscriptions` | Comma-separated subscription IDs | all accessible |
-| `--include-groups` | Include transitive group membership RBAC | `false` |
+| `--include-group-rbac` | Also query RBAC inherited through group memberships | `false` |
 | `--json-file` | **Deprecated.** Export results to JSON file — use `--export report.json` instead | — |
 | `--verbose` | Verbose output | `false` |
 
@@ -385,7 +385,7 @@ The provided ID doesn't match any object in the directory. Verify:
 
 ### Duplicate RBAC entries
 
-The tool deduplicates by default. If you still see duplicates when using `--include-groups`, the role may be assigned both directly to the identity *and* through a group membership. Both are legitimate assignments and are shown with their respective assignment type (`Direct` vs. the group name).
+The tool deduplicates by default. If you still see duplicates when using `--include-group-rbac`, the role may be assigned both directly to the identity *and* through a group membership. Both are legitimate assignments and are shown with their respective assignment type (`Direct` vs. the group name).
 
 ### Slow performance with many subscriptions
 
@@ -438,7 +438,7 @@ Verify the running identity has `Reader` access on the target subscriptions. Als
 Yes. Use `--export report.html` for a polished HTML report, or `--export report.xlsx` for Excel. CSV and Markdown are also supported.
 
 **Q: What's the difference between Direct and Inherited assignments?**
-Direct means the role is assigned directly to the identity. Inherited means it came through a group membership (shown when using `--include-groups`).
+Direct means the role is assigned directly to the identity. Inherited means it came through a group membership (shown when using `--include-group-rbac`).
 
 **Q: Does the tool work in CI/CD pipelines?**
 Yes. Use `--auth env` with `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` environment variables, and `--output json` for machine-readable output:
@@ -461,7 +461,7 @@ azure-rbac-inventory check <id> --subscriptions "sub-id-1,sub-id-2"
 - **Application identities** — Application registrations (`#microsoft.graph.application`) do not support group membership lookups via the Graph API. The group memberships section will return empty for these identities. Service principals associated with the same app registration *do* support group membership lookups.
 - **Access package request limit** — When using `--include-access-packages`, access package requests are limited to the **50 most recent** results (ordered by `createdDateTime desc`). If the identity has a longer request history, older requests are not returned.
 - **Dual output** — Use `--export results.json` together with `--output table` to get human-readable table output on screen and machine-readable JSON saved to a file simultaneously. The legacy `--json-file` flag still works but is deprecated — use `--export report.json` instead.
-- **Verbose mode** — `--verbose` currently only adds detail to group RBAC query warnings (e.g., when `--include-groups` encounters a permission error on a specific group). It does not affect other sections.
+- **Verbose mode** — `--verbose` currently only adds detail to group RBAC query warnings (e.g., when `--include-group-rbac` encounters a permission error on a specific group). It does not affect other sections.
 - **Eventual consistency** — All Graph API requests include the `ConsistencyLevel: eventual` header. This enables advanced query features but means results may be slightly stale (typically seconds, occasionally minutes) compared to the most recent directory changes.
 
 ## Security Considerations

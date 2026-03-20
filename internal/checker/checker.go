@@ -168,7 +168,7 @@ func Run(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environm
 	report.Warnings = allWarnings
 	report.SkippedAccessPackages = !cfg.IncludeAccessPackages
 
-	// If --include-groups, also get RBAC for each group (bounded concurrency)
+	// If --include-group-rbac, also get RBAC for each group (bounded concurrency)
 	if cfg.IncludeGroups && len(report.GroupMemberships) > 0 {
 		fmt.Fprint(os.Stderr, "Querying RBAC for group memberships...\n")
 
