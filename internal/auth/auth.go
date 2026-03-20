@@ -9,7 +9,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache"
 	cloudenv "github.com/jpmicrosoft/azure-rbac-inventory/internal/cloud"
 )
 
@@ -39,15 +38,8 @@ func NeedsPreAuth(method string) bool {
 	}
 }
 
-// newCache creates a persistent token cache, falling back to an empty cache on error.
-func newCache() azidentity.Cache {
-	c, err := cache.New(nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: token cache unavailable (%v), tokens will not be persisted\n", err)
-		return azidentity.Cache{}
-	}
-	return c
-}
+// newCache is defined in cache_cgo.go (with persistent token cache) or
+// cache_nocgo.go (returns empty cache for static/cross-compiled builds).
 
 // GetCredential returns an azcore.TokenCredential for the given auth method and cloud.
 func GetCredential(env cloudenv.Environment, tenantID string, authMethod string) (azcore.TokenCredential, error) {

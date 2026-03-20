@@ -44,76 +44,36 @@ jobs:
         with:
           version: v2.11.3
 
-  build:
+  release:
     needs: [test, lint]
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            goos: linux
-            goarch: amd64
-            artifact: azure-rbac-inventory-linux-amd64
-          - os: ubuntu-latest
-            goos: linux
-            goarch: arm64
-            artifact: azure-rbac-inventory-linux-arm64
-          - os: macos-latest
-            goos: darwin
-            goarch: amd64
-            artifact: azure-rbac-inventory-darwin-amd64
-          - os: macos-latest
-            goos: darwin
-            goarch: arm64
-            artifact: azure-rbac-inventory-darwin-arm64
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-            artifact: azure-rbac-inventory-windows-amd64.exe
-          - os: windows-latest
-            goos: windows
-            goarch: arm64
-            artifact: azure-rbac-inventory-windows-arm64.exe
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
       - name: Set version from tag
-        shell: bash
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
 
-      - name: Build
-        shell: bash
+      - name: Build all platforms
         run: |
-          GOARCH=${{ matrix.goarch }} go build -ldflags "-s -w -X main.version=${{ env.VERSION }}" -o ${{ matrix.artifact }} .
+          mkdir -p dist
+          LDFLAGS="-s -w -X main.version=${{ env.VERSION }}"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
-
-  release:
-    needs: [build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
+          CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-linux-amd64 .
+          CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-linux-arm64 .
+          CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-darwin-amd64 .
+          CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-darwin-arm64 .
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-windows-amd64.exe .
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-windows-arm64.exe .
 
       - name: Compress and checksum
         run: |
           cd dist
-          # Move artifacts out of subdirectories
-          for dir in */; do
-            mv "$dir"* . 2>/dev/null || true
-            rmdir "$dir" 2>/dev/null || true
-          done
-
           tar czf azure-rbac-inventory-linux-amd64.tar.gz   azure-rbac-inventory-linux-amd64
           tar czf azure-rbac-inventory-linux-arm64.tar.gz   azure-rbac-inventory-linux-arm64
           tar czf azure-rbac-inventory-darwin-amd64.tar.gz  azure-rbac-inventory-darwin-amd64
