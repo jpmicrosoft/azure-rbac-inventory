@@ -1,6 +1,11 @@
 # Azure RBAC Inventory
 
-A single-binary CLI tool that reports **all RBAC assignments, Entra ID directory roles, access package assignments, and group memberships** for any Azure identity.
+[![CI](https://github.com/jpmicrosoft/azure-rbac-inventory/actions/workflows/ci.yml/badge.svg)](https://github.com/jpmicrosoft/azure-rbac-inventory/actions/workflows/ci.yml)
+[![Release](https://github.com/jpmicrosoft/azure-rbac-inventory/actions/workflows/release.yml/badge.svg)](https://github.com/jpmicrosoft/azure-rbac-inventory/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jpmicrosoft/azure-rbac-inventory)](https://goreportcard.com/report/github.com/jpmicrosoft/azure-rbac-inventory)
+
+A single-binary CLI toolthat reports **all RBAC assignments, Entra ID directory roles, access package assignments, and group memberships** for any Azure identity.
 
 Supports **Azure Commercial** and **Azure Government** clouds.
 
