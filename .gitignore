@@ -1,0 +1,24 @@
+# Compiled binaries
+*.exe
+dist/
+__debug_bin*
+
+# Environment and secrets
+.env
+.env.*
+msal_token_cache*
+
+# Report exports (contain sensitive RBAC data)
+results.json
+*.html
+*.xlsx
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Copilot workspace artifacts
+.copilot-findings/
+.copilot-todos.db

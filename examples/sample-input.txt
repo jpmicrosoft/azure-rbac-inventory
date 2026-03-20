@@ -1,0 +1,7 @@
+# Identity list for RBAC audit
+# One ID or pattern per line
+
+12345678-aaaa-bbbb-cccc-111111111111
+12345678-aaaa-bbbb-cccc-222222222222
+spn-myapp*
+john.doe@contoso.com

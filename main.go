@@ -1,0 +1,17 @@
+package main
+
+import (
+	"os"
+
+	"github.com/jpmicrosoft/azure-rbac-inventory/cmd"
+)
+
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
+func main() {
+	cmd.SetVersion(version)
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}

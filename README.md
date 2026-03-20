@@ -1,0 +1,541 @@
+# Azure RBAC Inventory
+
+A single-binary CLI tool that reports **all RBAC assignments, Entra ID directory roles, access package assignments, and group memberships** for any Azure identity.
+
+Supports **Azure Commercial** and **Azure Government** clouds.
+
+## Features
+
+- **Identity Resolution** — Accepts an object ID or app ID and automatically resolves the identity type (user, SPN, managed identity, app registration, group)
+- **Azure RBAC** — Queries role assignments across all accessible subscriptions at every scope level (management group, subscription, resource group, resource)
+- **Entra ID Directory Roles** — Reports directory role assignments (Global Admin, User Admin, etc.)
+- **Access Packages** — Queries Identity Governance entitlement management for all assignment states (Delivered, Delivering, Pending Approval, Expired, etc.)
+- **Access Package Requests** — Shows pending, approved, and denied access package requests
+- **Group Memberships** — Lists direct and transitive group memberships
+- **Inherited RBAC** — Optionally queries RBAC assignments inherited through group memberships (`--include-groups`)
+- **Pattern Search** — Search by display name, SPN name, or wildcard pattern instead of requiring an exact ID
+- **File Input** — Batch-check multiple identities from a text file
+- **Export Formats** — Export results to CSV, HTML, Markdown, XLSX, or JSON files
+- **Grouped RBAC Output** — RBAC assignments are grouped by resource type for easier reading
+- **Dual Cloud** — Works with both Azure Commercial and Azure Government
+
+## Requirements
+
+### Runtime
+- Windows, macOS, or Linux (amd64 or arm64)
+- Network access to Azure ARM and Microsoft Graph endpoints (see [Cloud Endpoints](#cloud-endpoints))
+- An Azure account with appropriate permissions (see [Required Permissions](#required-permissions))
+
+### Build from Source
+- Go 1.26 or later
+- Git (to clone the repository)
+- Make (optional, for cross-platform builds)
+
+### Azure Permissions
+
+The identity running this tool needs these permissions at minimum:
+
+| Permission | Scope | Purpose | Required? |
+|---|---|---|---|
+| `Reader` | Subscriptions or Management Groups | List and query RBAC role assignments | Yes |
+| `Directory.Read.All` | Microsoft Graph (Application or Delegated) | Resolve identities, directory roles, group memberships | Yes |
+| `EntitlementManagement.Read.All` | Microsoft Graph (Application or Delegated) | Access package assignments and requests | Optional — tool continues without it |
+
+> **Tip:** For service principal auth, these Graph permissions must be granted as **Application permissions** with admin consent. For interactive/CLI auth, they can be delegated permissions.
+
+## Quick Start
+
+```bash
+# Download the binary for your platform from Releases (or build from source)
+
+# Login to Azure (any of these methods work)
+az login                          # Interactive browser login
+az login --service-principal ...  # Service principal
+# Or set environment variables for SPN auth:
+#   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+
+# Check an identity
+./azure-rbac-inventory check <object-id-or-app-id>
+
+# Azure Government
+./azure-rbac-inventory check <object-id> --cloud AzureUSGovernment
+
+# Export to JSON
+./azure-rbac-inventory check <object-id> --export report.json
+
+# Include RBAC inherited through group memberships
+./azure-rbac-inventory check <object-id> --include-groups
+
+# Search by display name or pattern
+./azure-rbac-inventory check "spn-myapp*" --cloud AzureUSGovernment --auth interactive
+
+# Check a managed identity by name
+./azure-rbac-inventory check "my-managed-identity" --type managed-identity
+
+# Batch check from a file
+./azure-rbac-inventory check --file identities.txt --cloud AzureUSGovernment
+
+# Export to CSV, HTML, or Excel
+./azure-rbac-inventory check <object-id> --export report.csv
+./azure-rbac-inventory check <object-id> --export report.html
+./azure-rbac-inventory check <object-id> --export report.xlsx
+```
+
+## Usage
+
+```
+azure-rbac-inventory check <identity> [flags]
+
+Global Flags:
+      --cloud string           Azure cloud name (AzureCloud|AzureUSGovernment|AzureChinaCloud) (default "AzureCloud")
+      --tenant string          Tenant ID (uses default from credential if not set)
+      --auth string            Authentication method (default|cli|interactive|device-code|env|managed-identity) (default "default")
+  -o, --output string          Output format (table|json|csv|markdown) (default "table")
+      --subscriptions string   Comma-separated subscription IDs (default: all accessible)
+      --include-groups         Include transitive group membership RBAC assignments
+      --file string            Read identities from file (one per line)
+      --type string            Filter identity type (spn|user|group|managed-identity|app|all) (default "all")
+      --export string          Export to file (format inferred from extension: .csv, .html, .md, .xlsx, .json)
+      --per-identity           Separate output per identity (default false)
+      --max-results int        Max search results for pattern matching (default 50)
+      --concurrency int        Max concurrent identity checks (default 5)
+      --json-file string       [Deprecated] Export results to JSON file — use --export report.json instead
+  -v, --verbose                Verbose output
+  -h, --help                   help for azure-rbac-inventory
+
+# Version (root command only)
+azure-rbac-inventory --version
+```
+
+> **Note:** The `--cloud` flag value is **case-sensitive**. Use the exact names shown above:
+> `AzureCloud`, `AzureUSGovernment`, or `AzureChinaCloud`. Lowercase variants like `azurecloud` are not accepted.
+
+## Pattern Search
+
+Instead of requiring an exact object ID, you can search by display name or wildcard pattern:
+
+```bash
+# Exact display name match
+azure-rbac-inventory check "my-app-spn"
+
+# Prefix wildcard — matches anything starting with "spn-myapp"
+azure-rbac-inventory check "spn-myapp*" --cloud AzureUSGovernment --auth interactive
+
+# Contains wildcard — matches anything containing "prod"
+azure-rbac-inventory check "*prod*" --type spn --max-results 10
+
+# Managed identity by name
+azure-rbac-inventory check "my-managed-identity" --type managed-identity
+```
+
+Use `--type` to filter by identity type: `spn`, `user`, `group`, `managed-identity`, `app`, or `all` (default).
+Use `--max-results` to limit search results (default: 50).
+
+## File Input
+
+Check multiple identities at once by reading from a file:
+
+```bash
+azure-rbac-inventory check --file identities.csv --cloud AzureUSGovernment
+azure-rbac-inventory check --file identities.json --export report.html
+azure-rbac-inventory check --file identities.txt --per-identity --export reports.csv
+```
+
+Use `--per-identity` to produce separate output sections per identity.
+Use `--concurrency` to control how many identities are checked in parallel (default: 5).
+
+## File Input Formats
+
+The `--file` flag supports three formats, auto-detected by file extension:
+
+| Extension | Format | Parser |
+|-----------|--------|--------|
+| `.csv` | Comma-separated values | CSV with header row |
+| `.json` | JSON | `{"identities": [...]}` structure |
+| `.txt` (or any other) | Plain text | One ID per line |
+
+### CSV Format
+
+Requires a header row with an `id` column (case-insensitive). Optional columns: `type`, `label`. Column order does not matter. Values are trimmed of leading/trailing whitespace.
+
+```csv
+id,type,label
+12345678-aaaa-bbbb-cccc-111111111111,spn,Production Service Principal
+12345678-aaaa-bbbb-cccc-222222222222,,Production SPN
+spn-myapp*,spn,All Application SPNs
+john.doe@contoso.com,user,John Doe
+```
+
+### JSON Format
+
+Requires a top-level `identities` array. Each entry must have an `id` field. Optional fields: `type`, `label`.
+
+```json
+{
+  "identities": [
+    {"id": "12345678-aaaa-bbbb-cccc-111111111111", "type": "spn", "label": "Production Service Principal"},
+    {"id": "12345678-aaaa-bbbb-cccc-222222222222", "label": "Production SPN"},
+    {"id": "spn-myapp*", "type": "spn", "label": "All Application SPNs"},
+    {"id": "john.doe@contoso.com", "type": "user", "label": "John Doe"}
+  ]
+}
+```
+
+### Plain Text Format
+
+One identity per line. Lines starting with `#` are comments. Empty lines are ignored.
+
+```
+# Identity list for RBAC audit
+# One ID or pattern per line
+
+12345678-aaaa-bbbb-cccc-111111111111
+12345678-aaaa-bbbb-cccc-222222222222
+spn-myapp*
+john.doe@contoso.com
+```
+
+### Example Files
+
+See the [`examples/`](examples/) directory for sample input files in all three formats:
+
+- [`sample-input.csv`](examples/sample-input.csv)
+- [`sample-input.json`](examples/sample-input.json)
+- [`sample-input.txt`](examples/sample-input.txt)
+
+## Export Formats
+
+Export results to a file — the format is inferred from the file extension:
+
+```bash
+azure-rbac-inventory check <id> --export report.csv
+azure-rbac-inventory check <id> --export report.html
+azure-rbac-inventory check <id> --export report.md
+azure-rbac-inventory check <id> --export report.xlsx
+azure-rbac-inventory check <id> --export report.json
+```
+
+Console output format can be set independently with `--output`:
+
+```bash
+azure-rbac-inventory check <id> --output json
+azure-rbac-inventory check <id> --output csv
+azure-rbac-inventory check <id> --output markdown
+```
+
+## Flags Reference
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--file` | Read identities from file | — |
+| `--type` | Filter identity type (`spn\|user\|group\|managed-identity\|app\|all`) | `all` |
+| `--export` | Export to file (format from extension: `.csv`, `.html`, `.md`, `.xlsx`, `.json`) | — |
+| `--per-identity` | Separate output per identity | `false` |
+| `--max-results` | Max search results | `50` |
+| `--concurrency` | Max concurrent checks | `5` |
+| `--auth` | Authentication method (`default\|cli\|interactive\|device-code\|env\|managed-identity`) | `default` |
+| `--output` | Console format: `table\|json\|csv\|markdown` | `table` |
+| `--cloud` | Azure cloud name | `AzureCloud` |
+| `--tenant` | Tenant ID | auto-detected |
+| `--subscriptions` | Comma-separated subscription IDs | all accessible |
+| `--include-groups` | Include transitive group membership RBAC | `false` |
+| `--json-file` | **Deprecated.** Export results to JSON file — use `--export report.json` instead | — |
+| `--verbose` | Verbose output | `false` |
+
+## Authentication
+
+Azure RBAC Inventory uses Azure's `DefaultAzureCredential` by default, which tries these methods in order:
+
+| Priority | Method | How to use |
+|----------|--------|------------|
+| 1 | Environment variables | Set `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` (or `AZURE_CLIENT_CERTIFICATE_PATH`) |
+| 2 | Workload Identity | Automatic in Kubernetes with workload identity configured |
+| 3 | Managed Identity | Automatic on Azure VMs, App Service, etc. |
+| 4 | Azure CLI | Run `az login` first |
+| 5 | Azure Developer CLI | Run `azd auth login` first |
+
+You can override the default chain using the `--auth` flag to select a specific authentication method:
+
+| `--auth` value | Method | Use case |
+|----------------|--------|----------|
+| `default` | `DefaultAzureCredential` (chain above) | General use — tries all methods in order |
+| `cli` | Azure CLI credential | When already logged in with `az login` |
+| `interactive` | Interactive browser login | Opens a browser for sign-in; tokens are cached locally |
+| `device-code` | Device code flow | For environments without a browser (SSH, containers) |
+| `env` | Environment variables only | CI/CD pipelines with `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` |
+| `managed-identity` | Managed Identity only | Azure VMs, App Service, AKS with managed identity |
+
+```bash
+# Use Azure CLI credentials explicitly
+azure-rbac-inventory check <id> --auth cli
+
+# Interactive browser login (with token caching)
+azure-rbac-inventory check <id> --auth interactive
+
+# CI/CD with service principal environment variables
+azure-rbac-inventory check <id> --auth env --output json
+```
+
+## Required Permissions
+
+The identity running this tool needs:
+
+| Permission | Scope | Purpose | Required? |
+|------------|-------|---------|-----------|
+| `Reader` | Subscriptions / Management Groups | Query RBAC role assignments | Yes |
+| `Directory.Read.All` | Microsoft Graph | Resolve identities, query directory roles and group memberships | Yes |
+| `EntitlementManagement.Read.All` | Microsoft Graph | Query access package assignments and requests | Optional — tool continues without it |
+
+> **Tip:** For service principal auth, these Graph permissions must be granted as **Application permissions** with admin consent. For interactive/CLI auth, they can be delegated permissions.
+
+## Cloud Endpoints
+
+| Service | AzureCloud | AzureUSGovernment | AzureChinaCloud |
+|---------|-----------|------------|-----------------|
+| ARM | `management.azure.com` | `management.usgovcloudapi.net` | `management.chinacloudapi.cn` |
+| Graph | `graph.microsoft.com` | `graph.microsoft.us` | `microsoftgraph.chinacloudapi.cn` |
+| Login | `login.microsoftonline.com` | `login.microsoftonline.us` | `login.chinacloudapi.cn` |
+
+## Testing
+
+```bash
+# Run all tests
+go test ./...
+
+# Run tests with verbose output
+make test
+
+# Run tests with race detection
+make test-race
+# or directly:
+go test -race ./... -count=1
+```
+
+> **Note:** The `-race` flag requires CGO and is not available on all platforms (e.g., `windows/arm64`).
+> Race detection is recommended to run in CI on `linux/amd64` where CGO is available by default.
+
+## Build from Source
+
+Requires Go 1.26+.
+
+```bash
+# Build for current platform
+go build -o azure-rbac-inventory.exe .
+
+# Cross-compile for all platforms (requires make)
+# NOTE: The Makefile uses Windows cmd.exe syntax (set GOOS=...).
+# On Linux/macOS, use standard env vars instead: GOOS=linux GOARCH=amd64 go build ...
+make all
+
+# Outputs in dist/:
+#   azure-rbac-inventory-windows-amd64.exe
+#   azure-rbac-inventory-windows-arm64.exe
+#   azure-rbac-inventory-linux-amd64
+#   azure-rbac-inventory-linux-arm64
+#   azure-rbac-inventory-darwin-amd64
+#   azure-rbac-inventory-darwin-arm64
+```
+
+## Troubleshooting
+
+### Authentication failures
+
+If you see `authentication failed:` errors:
+
+- **`az login` expired** — Re-run `az login`. Azure CLI tokens expire after ~1 hour of inactivity.
+- **Environment variables missing** — When using service principal auth, all three variables must be set: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` (or `AZURE_CLIENT_CERTIFICATE_PATH`). A missing variable causes `DefaultAzureCredential` to skip that method silently and fall through to the next one.
+- **Wrong tenant** — If you're getting `authorization_request_denied` errors, verify you're authenticating against the correct tenant with `--tenant <tenant-id>`.
+
+### "Token expired" / "AADSTS700024"
+
+The cached token expired. Re-run `az login` or clear the token cache:
+
+```bash
+# Linux / macOS
+rm -f ~/.azure/msal_token_cache*
+
+# Windows (PowerShell)
+Remove-Item "$env:USERPROFILE\.azure\msal_token_cache*" -ErrorAction SilentlyContinue
+```
+
+Then authenticate again with `az login` or your preferred `--auth` method.
+
+### 403 Forbidden on Graph API
+
+The tool queries Microsoft Graph for directory roles, group memberships, and access packages. If you see `Graph API error (HTTP 403)`:
+
+- **Missing `Directory.Read.All`** — Required for identity resolution, directory role lookups, and group membership queries.
+- **Missing `EntitlementManagement.Read.All`** — Required for access package assignment and request queries. Without it, access package sections will show warnings instead of results.
+- The tool continues running even when individual queries fail (partial failure model). Check the `Warning:` messages in stderr output to identify which permissions are missing.
+
+### Empty results
+
+- **"0 found" is genuine** — If a section shows `0 found` with no warning, the query succeeded and the identity truly has no assignments of that type.
+- **Warning messages indicate API failure** — If you see `Warning: <section> query failed:` in the stderr output, the query did not succeed. The `0 found` count in that case does not mean the identity has no assignments — it means the tool could not retrieve them. Fix the underlying permission or network issue.
+
+### "No subscriptions found"
+
+The identity may not have `Reader` on any subscription. Use `--subscriptions` to specify subscription IDs explicitly:
+
+```bash
+azure-rbac-inventory check <id> --subscriptions "sub-id-1,sub-id-2"
+```
+
+### "Connection refused" / timeout errors
+
+Verify network connectivity to Azure ARM and Graph endpoints. Corporate firewalls and proxies may block these. See [Cloud Endpoints](#cloud-endpoints) for the hostnames that must be reachable.
+
+```bash
+# Test ARM connectivity
+curl -s https://management.azure.com/tenants?api-version=2020-01-01
+
+# Test Graph connectivity
+curl -s https://graph.microsoft.com/v1.0/$metadata
+```
+
+### "identity not found"
+
+The provided ID doesn't match any object in the directory. Verify:
+- The GUID is correct (no typos, no extra whitespace)
+- You're targeting the right tenant (`--tenant <tenant-id>`)
+- You're using the right cloud (`--cloud AzureUSGovernment` for Gov tenants)
+
+### Duplicate RBAC entries
+
+The tool deduplicates by default. If you still see duplicates when using `--include-groups`, the role may be assigned both directly to the identity *and* through a group membership. Both are legitimate assignments and are shown with their respective assignment type (`Direct` vs. the group name).
+
+### Slow performance with many subscriptions
+
+RBAC queries run per-subscription. To improve performance:
+- Use `--subscriptions sub-id-1,sub-id-2` to limit scope to specific subscriptions
+- Increase `--concurrency` (default: 5) for parallel processing
+
+### Azure Government cloud
+
+To use with Azure Government:
+
+```bash
+# 1. Set your Azure CLI to the Government cloud
+az cloud set --name AzureUSGovernment
+az login
+
+# 2. Pass --cloud flag to azure-rbac-inventory
+./azure-rbac-inventory check <object-id> --cloud AzureUSGovernment
+```
+
+Both steps are required. The `--cloud` flag tells azure-rbac-inventory which Graph and ARM endpoints to use, but `az login` must also be authenticated against the Government cloud. If you see `invalid_resource` or endpoint errors, verify both are set consistently.
+
+## FAQ
+
+**Q: Can I check multiple identities at once?**
+Yes. Use `--file` with a CSV, JSON, or text file containing identity IDs or patterns. See [File Input Formats](#file-input-formats) for details.
+
+**Q: Does this tool make any changes?**
+No. Azure RBAC Inventory is strictly read-only. It only queries Azure ARM and Microsoft Graph APIs. No modifications are made to any resources, roles, or assignments.
+
+**Q: What identity types are supported?**
+Users, service principals (SPNs), managed identities, app registrations, and groups. Use `--type` to filter by a specific type.
+
+**Q: Why do I see "Access package query failed" warnings?**
+The `EntitlementManagement.Read.All` permission is required for access packages. Without it, the tool shows a warning but continues checking RBAC, directory roles, and group memberships.
+
+**Q: Can I use this with Azure Government?**
+Yes. Pass `--cloud AzureUSGovernment`. Make sure `az login` is also targeting the Government cloud (`az cloud set --name AzureUSGovernment`). See [Azure Government cloud](#azure-government-cloud).
+
+**Q: How do I check a managed identity?**
+Pass the object ID directly, or search by name with `--type managed-identity`:
+```bash
+azure-rbac-inventory check "my-managed-identity" --type managed-identity
+```
+
+**Q: Why are RBAC results showing 0 when I know there are assignments?**
+Verify the running identity has `Reader` access on the target subscriptions. Also check if you need `--subscriptions` to specify particular subscription IDs. Use `--verbose` to see which subscriptions were queried.
+
+**Q: Can I export results for a manager or auditor?**
+Yes. Use `--export report.html` for a polished HTML report, or `--export report.xlsx` for Excel. CSV and Markdown are also supported.
+
+**Q: What's the difference between Direct and Inherited assignments?**
+Direct means the role is assigned directly to the identity. Inherited means it came through a group membership (shown when using `--include-groups`).
+
+**Q: Does the tool work in CI/CD pipelines?**
+Yes. Use `--auth env` with `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` environment variables, and `--output json` for machine-readable output:
+```bash
+azure-rbac-inventory check <id> --auth env --output json --export report.json
+```
+
+**Q: What happens if I don't have permissions to all subscriptions?**
+The tool queries all accessible subscriptions by default. Subscriptions you can't access are silently skipped. Use `--verbose` to see which subscriptions were queried.
+
+**Q: Can I limit which subscriptions are checked?**
+Yes. Use `--subscriptions` to check only specific subscriptions:
+```bash
+azure-rbac-inventory check <id> --subscriptions "sub-id-1,sub-id-2"
+```
+
+## Notes & Limitations
+
+- **Concurrency** — The tool runs all top-level queries (RBAC, directory roles, access packages, group memberships) in parallel for speed. RBAC subscription queries are additionally parallelized with a concurrency limit of 10 subscriptions at a time. Progress messages are printed to stderr and may interleave.
+- **Application identities** — Application registrations (`#microsoft.graph.application`) do not support group membership lookups via the Graph API. The group memberships section will return empty for these identities. Service principals associated with the same app registration *do* support group membership lookups.
+- **Access package request limit** — Access package requests are limited to the **50 most recent** results (ordered by `createdDateTime desc`). If the identity has a longer request history, older requests are not returned.
+- **Dual output** — Use `--export results.json` together with `--output table` to get human-readable table output on screen and machine-readable JSON saved to a file simultaneously. The legacy `--json-file` flag still works but is deprecated — use `--export report.json` instead.
+- **Verbose mode** — `--verbose` currently only adds detail to group RBAC query warnings (e.g., when `--include-groups` encounters a permission error on a specific group). It does not affect other sections.
+- **Eventual consistency** — All Graph API requests include the `ConsistencyLevel: eventual` header. This enables advanced query features but means results may be slightly stale (typically seconds, occasionally minutes) compared to the most recent directory changes.
+
+## Security Considerations
+
+- **Read-only** — This tool performs only read operations against Azure ARM and Microsoft Graph APIs. It does not create, modify, or delete any resources.
+- **No secrets stored** — The tool does not store or cache any credentials. Authentication is delegated to the Azure Identity SDK which manages token lifecycle.
+- **Token caching** — When using interactive auth (`--auth interactive`), tokens are cached locally by the Azure Identity SDK (via MSAL) to avoid repeated login prompts. Cache files are stored with restricted permissions.
+- **Output sensitivity** — Report outputs (JSON, HTML, CSV, XLSX, etc.) contain identity information including object IDs, role assignments, and group memberships. Treat exported files as sensitive and handle according to your organization's data classification policies.
+- **Network** — All API calls use HTTPS. The tool validates pagination URLs to prevent token theft via malicious redirect.
+
+## Example Output
+
+```
+  ======================================================
+   Azure RBAC Inventory - Identity Report
+  ======================================================
+
+    Name:       my-app-spn
+    Object ID:  aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+    Type:       ServicePrincipal
+    App ID:     11111111-2222-3333-4444-555555555555
+    Cloud:      AzureCloud
+
+  [RBAC] Azure Role Assignments (5)
+  ------------------------------------------------------
+
+    ► Subscription: abc-def-123 (3)
+        Contributor                              [Direct]
+        Key Vault Administrator                  [Direct]
+        Storage Blob Data Contributor            [Direct]
+
+    ► Resource Group: rg-prod-eastus (1)
+        Reader                                   [Direct]
+
+    ► Key Vaults (1)
+        Key Vault Secrets Officer  → kv-prod-secrets  Direct
+
+  [ROLES] Entra ID Directory Roles (1)
+  ------------------------------------------------------
+    * Application Administrator  [Active]
+
+  [PACKAGES] Access Package Assignments (0)
+  ------------------------------------------------------
+    None found.
+
+  [REQUESTS] Access Package Requests (0)
+  ------------------------------------------------------
+    None found.
+
+  [GROUPS] Group Memberships (2)
+  ------------------------------------------------------
+    GROUP                          TYPE               MEMBERSHIP
+    ------------------------------  ---------------    ------------
+    DevOps-Team                    Security           Direct
+    All-Engineers                  Microsoft 365      Transitive
+```
+
+## License
+
+MIT

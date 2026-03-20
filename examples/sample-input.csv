@@ -1,0 +1,5 @@
+id,type,label
+12345678-aaaa-bbbb-cccc-111111111111,spn,Production Service Principal
+12345678-aaaa-bbbb-cccc-222222222222,,Staging SPN
+spn-myapp*,spn,All MyApp SPNs
+john.doe@contoso.com,user,John Doe
