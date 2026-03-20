@@ -1,3 +1,4 @@
+// Package auth provides Azure authentication credential management.
 package auth
 
 import (

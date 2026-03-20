@@ -75,7 +75,7 @@ func parseTextInput(path string) ([]InputEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file %q: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var entries []InputEntry
 	scanner := bufio.NewScanner(f)
@@ -105,7 +105,7 @@ func parseCSVInput(path string) ([]InputEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file %q: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	reader := csv.NewReader(f)
 	records, err := reader.ReadAll()
@@ -180,7 +180,7 @@ func parseJSONInput(path string) ([]InputEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file %q: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var wrapper jsonInputWrapper
 	decoder := json.NewDecoder(f)

@@ -259,7 +259,7 @@ func printRBACAssignments(assignments []rbac.RoleAssignment) {
 			for _, item := range g.items {
 				fmt.Fprintf(w, "        %s\t→ %s\t%s\n", item.roleName, item.resourceName, item.assignmentType)
 			}
-			w.Flush()
+			_ = w.Flush()
 		} else {
 			for _, item := range g.items {
 				fmt.Printf("        %-40s [%s]\n", item.roleName, item.assignmentType)
@@ -311,7 +311,7 @@ func printAccessPackages(packages []graph.AccessPackageAssignment, skipped bool)
 		}
 		fmt.Fprintf(w, "    %s\t%s\t%s\t%s\n", p.PackageName, p.CatalogName, p.Status, expires)
 	}
-	w.Flush()
+	_ = w.Flush()
 	fmt.Println()
 }
 
@@ -337,7 +337,7 @@ func printAccessRequests(requests []graph.AccessPackageRequest, skipped bool) {
 	for _, r := range requests {
 		fmt.Fprintf(w, "    %s\t%s\t%s\t%s\n", r.PackageName, r.RequestType, r.Status, r.CreatedDate)
 	}
-	w.Flush()
+	_ = w.Flush()
 	fmt.Println()
 }
 
@@ -357,7 +357,7 @@ func printGroupMemberships(groups []graph.GroupMembership) {
 	for _, g := range groups {
 		fmt.Fprintf(w, "    %s\t%s\t%s\n", g.GroupName, g.GroupType, g.Membership)
 	}
-	w.Flush()
+	_ = w.Flush()
 	fmt.Println()
 }
 

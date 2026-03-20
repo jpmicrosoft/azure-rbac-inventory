@@ -321,11 +321,9 @@ func TestRun_IdentityID_TableDriven(t *testing.T) {
 				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
 					t.Errorf("expected error containing %q, got: %v", tt.errContains, err)
 				}
-			} else {
+			} else if err != nil && strings.Contains(err.Error(), "invalid identity ID format") {
 				// For valid UUIDs, the error (if any) should NOT be about identity validation.
-				if err != nil && strings.Contains(err.Error(), "invalid identity ID format") {
-					t.Errorf("valid UUID should pass validation, got: %v", err)
-				}
+				t.Errorf("valid UUID should pass validation, got: %v", err)
 			}
 		})
 	}

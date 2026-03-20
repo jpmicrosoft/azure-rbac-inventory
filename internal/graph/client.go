@@ -97,7 +97,7 @@ func (c *Client) DoRequestWithHeaders(ctx context.Context, path string, query ur
 					wait = time.Duration(secs) * time.Second
 				}
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if wait > maxRetrySleep {
 				wait = maxRetrySleep
 			}
@@ -114,7 +114,7 @@ func (c *Client) DoRequestWithHeaders(ctx context.Context, path string, query ur
 	if resp == nil {
 		return nil, fmt.Errorf("no response after %d retries", maxRetries)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {

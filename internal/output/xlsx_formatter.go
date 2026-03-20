@@ -108,7 +108,7 @@ func xlsxWriteSheet(f *excelize.File, sheet string, hStyle int, headers []string
 
 func (x XLSXFormatter) FormatReport(rpt *reportpkg.Report) ([]byte, error) {
 	f := excelize.NewFile()
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	hStyle, err := xlsxHeaderStyle(f)
 	if err != nil {
@@ -175,7 +175,7 @@ func (x XLSXFormatter) FormatReport(rpt *reportpkg.Report) ([]byte, error) {
 		}
 	}
 
-	f.DeleteSheet("Sheet1")
+	_ = f.DeleteSheet("Sheet1")
 
 	buf, err := f.WriteToBuffer()
 	if err != nil {
@@ -186,7 +186,7 @@ func (x XLSXFormatter) FormatReport(rpt *reportpkg.Report) ([]byte, error) {
 
 func (x XLSXFormatter) FormatMultiReport(reports []*reportpkg.Report) ([]byte, error) {
 	f := excelize.NewFile()
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	hStyle, err := xlsxHeaderStyle(f)
 	if err != nil {
@@ -263,7 +263,7 @@ func (x XLSXFormatter) FormatMultiReport(reports []*reportpkg.Report) ([]byte, e
 		}
 	}
 
-	f.DeleteSheet("Sheet1")
+	_ = f.DeleteSheet("Sheet1")
 
 	buf, err := f.WriteToBuffer()
 	if err != nil {

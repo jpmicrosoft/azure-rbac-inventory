@@ -1,3 +1,4 @@
+// Package cmd implements the CLI commands for azure-rbac-inventory.
 package cmd
 
 import (

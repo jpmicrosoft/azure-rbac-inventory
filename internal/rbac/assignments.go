@@ -91,7 +91,9 @@ func (c *Checker) GetAssignments(ctx context.Context, principalID string, subscr
 		})
 	}
 
-	g.Wait()
+	if err := g.Wait(); err != nil {
+		return nil, warnings, err
+	}
 
 	// Deduplicate: management-group-level assignments appear from every child subscription
 	allAssignments = deduplicateAssignments(allAssignments)

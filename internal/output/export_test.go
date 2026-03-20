@@ -255,7 +255,7 @@ func TestXLSXFormatter_FormatReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open XLSX output: %v", err)
 	}
-	defer xlsx.Close()
+	defer func() { _ = xlsx.Close() }()
 
 	sheets := xlsx.GetSheetList()
 	expectedSheets := []string{

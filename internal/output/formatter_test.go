@@ -29,13 +29,13 @@ func captureStdout(t *testing.T, fn func()) string {
 	outC := make(chan string)
 	go func() {
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, _ = io.Copy(&buf, r)
 		outC <- buf.String()
 	}()
 
 	fn()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 	return <-outC
 }

@@ -86,11 +86,12 @@ func writeMarkdownReport(buf *bytes.Buffer, rpt *report.Report) {
 
 	// Access Package Assignments
 	fmt.Fprintf(buf, "### Access Package Assignments (%d)\n\n", len(rpt.AccessPackages))
-	if rpt.SkippedAccessPackages {
+	switch {
+	case rpt.SkippedAccessPackages:
 		buf.WriteString("_Skipped (use --include-access-packages to query)_\n\n")
-	} else if len(rpt.AccessPackages) == 0 {
+	case len(rpt.AccessPackages) == 0:
 		buf.WriteString("_No results found._\n\n")
-	} else {
+	default:
 		buf.WriteString("| Package | Catalog | Status | Expires |\n")
 		buf.WriteString("|---------|---------|--------|---------|\n")
 		for _, p := range rpt.AccessPackages {
@@ -109,11 +110,12 @@ func writeMarkdownReport(buf *bytes.Buffer, rpt *report.Report) {
 
 	// Access Package Requests
 	fmt.Fprintf(buf, "### Access Package Requests (%d)\n\n", len(rpt.AccessRequests))
-	if rpt.SkippedAccessPackages {
+	switch {
+	case rpt.SkippedAccessPackages:
 		buf.WriteString("_Skipped (use --include-access-packages to query)_\n\n")
-	} else if len(rpt.AccessRequests) == 0 {
+	case len(rpt.AccessRequests) == 0:
 		buf.WriteString("_No results found._\n\n")
-	} else {
+	default:
 		buf.WriteString("| Package | Type | Status | Created |\n")
 		buf.WriteString("|---------|------|--------|---------|\n")
 		for _, r := range rpt.AccessRequests {
