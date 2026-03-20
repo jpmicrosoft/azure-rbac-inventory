@@ -144,3 +144,25 @@ func TestMaxConcurrentSubscriptions(t *testing.T) {
 		t.Errorf("maxConcurrentSubscriptions = %d, seems unreasonably high (>50)", maxConcurrentSubscriptions)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Security regression: ARM filter escaping
+// ---------------------------------------------------------------------------
+
+func TestEscapeARMFilter(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"normal-uuid", "normal-uuid"},
+		{"id-with-'quote", "id-with-''quote"},
+		{"multiple'quotes'here", "multiple''quotes''here"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := escapeARMFilter(tt.input)
+		if got != tt.want {
+			t.Errorf("escapeARMFilter(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}

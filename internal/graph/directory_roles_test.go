@@ -248,3 +248,28 @@ func TestGetRoleAssignments_InvalidJSON(t *testing.T) {
 		t.Errorf("got %d roles, want 0 (bad items should be skipped)", len(roles))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Security regression: OData escaping in principalId filter
+// ---------------------------------------------------------------------------
+
+func TestGetRoleAssignments_EscapesPrincipalID(t *testing.T) {
+	var capturedQuery url.Values
+	mock := &mockGraphRequester{
+		doPagedRequestFunc: func(ctx context.Context, path string, query url.Values) ([]json.RawMessage, error) {
+			capturedQuery = query
+			return nil, nil
+		},
+	}
+
+	checker := NewDirectoryRoleChecker(mock)
+	_, _ = checker.GetRoleAssignments(context.Background(), "id-with-'quote")
+
+	filter := capturedQuery.Get("$filter")
+	if strings.Contains(filter, "id-with-'quote") {
+		t.Errorf("filter contains unescaped single quote — injection possible: %s", filter)
+	}
+	if !strings.Contains(filter, "id-with-''quote") {
+		t.Errorf("filter should contain doubled single quote, got: %s", filter)
+	}
+}

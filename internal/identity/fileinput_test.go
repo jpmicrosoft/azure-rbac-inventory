@@ -2,6 +2,7 @@ package identity
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -615,5 +616,32 @@ func TestValidateInputType(t *testing.T) {
 		if err := ValidateInputType(v); err == nil {
 			t.Errorf("ValidateInputType(%q) should have returned an error", v)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Security regression: maxInputEntries limit
+// ---------------------------------------------------------------------------
+
+func TestParseInputFile_ExceedsMaxEntries(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "too_many.txt")
+
+	// Create a file with maxInputEntries + 1 lines
+	var lines []string
+	for i := 0; i <= maxInputEntries; i++ {
+		lines = append(lines, fmt.Sprintf("entry-%d", i))
+	}
+	content := strings.Join(lines, "\n")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	_, err := ParseInputFile(path)
+	if err == nil {
+		t.Fatal("expected error when file exceeds maxInputEntries, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeding maximum") {
+		t.Errorf("error should mention exceeding maximum, got: %v", err)
 	}
 }

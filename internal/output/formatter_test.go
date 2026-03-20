@@ -766,3 +766,80 @@ func TestFriendlyScope(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Security regression: CSV formula injection sanitization
+// ---------------------------------------------------------------------------
+
+func TestCSVFormatter_SanitizesFormulaInjection(t *testing.T) {
+	rpt := &report.Report{
+		Identity: &identity.Identity{
+			ObjectID:    "test-id",
+			DisplayName: "=CMD|'/C calc'!A1",
+			Type:        identity.TypeUser,
+		},
+		Cloud: "AzureCloud",
+		RBACAssignments: []rbac.RoleAssignment{
+			{
+				RoleName:       "+malicious-role",
+				Scope:          "-some-scope",
+				ScopeType:      "Subscription",
+				PrincipalType:  "@attacker",
+				AssignmentType: "Direct",
+			},
+		},
+	}
+
+	f := &CSVFormatter{}
+	data, err := f.FormatReport(rpt)
+	if err != nil {
+		t.Fatalf("FormatReport failed: %v", err)
+	}
+
+	csvStr := string(data)
+
+	// Verify formula-trigger characters are prefixed with single quote
+	if strings.Contains(csvStr, ",=CMD") || strings.Contains(csvStr, "\"=CMD") {
+		t.Error("CSV contains unsanitized '=' prefix in display name")
+	}
+	if strings.Contains(csvStr, ",+malicious") {
+		t.Error("CSV contains unsanitized '+' prefix in role name")
+	}
+	if strings.Contains(csvStr, ",-some-scope") {
+		t.Error("CSV contains unsanitized '-' prefix in scope")
+	}
+	if strings.Contains(csvStr, ",@attacker") {
+		t.Error("CSV contains unsanitized '@' prefix in principal type")
+	}
+
+	// Verify the sanitized values ARE present (prefixed with ')
+	if !strings.Contains(csvStr, "'=CMD") {
+		t.Error("CSV should contain sanitized '=' prefix (prefixed with single quote)")
+	}
+	if !strings.Contains(csvStr, "'+malicious") {
+		t.Error("CSV should contain sanitized '+' prefix")
+	}
+}
+
+func TestSanitizeCSVCell(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"normal text", "normal text"},
+		{"=formula", "'=formula"},
+		{"+cmd", "'+cmd"},
+		{"-subtract", "'-subtract"},
+		{"@mention", "'@mention"},
+		{"\ttab", "'\ttab"},
+		{"\rreturn", "'\rreturn"},
+		{"", ""},
+		{"no prefix issue", "no prefix issue"},
+	}
+	for _, tt := range tests {
+		got := sanitizeCSVCell(tt.input)
+		if got != tt.want {
+			t.Errorf("sanitizeCSVCell(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}

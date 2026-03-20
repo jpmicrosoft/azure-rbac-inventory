@@ -402,3 +402,100 @@ func TestSearch_ResultsSortedByDisplayName(t *testing.T) {
 		t.Errorf("third result = %q, want %q", results[2].Identity.DisplayName, "Zulu")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Security regression: escapeODataSearch tests
+// ---------------------------------------------------------------------------
+
+func TestEscapeODataSearch(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"no quotes", "no quotes"},
+		{`has "quotes"`, `has \"quotes\"`},
+		{`"leading`, `\"leading`},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := escapeODataSearch(tt.input)
+		if got != tt.want {
+			t.Errorf("escapeODataSearch(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Security regression: $search injection prevention
+// ---------------------------------------------------------------------------
+
+func TestSearch_ContainsPattern_EscapesDoubleQuotes(t *testing.T) {
+	var capturedQuery url.Values
+	mock := &mockGraphRequester{
+		doRequestWithHeadersFunc: func(ctx context.Context, path string, query url.Values, headers map[string]string) ([]byte, error) {
+			capturedQuery = query
+			return []byte(`{"value": []}`), nil
+		},
+	}
+
+	resolver := NewResolver(mock)
+	// *test"inject* → contains pattern with double quote injection attempt
+	_, err := resolver.Search(context.Background(), `*test"inject*`, "spn", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	search := capturedQuery.Get("$search")
+	if strings.Contains(search, `test"inject`) {
+		t.Errorf("$search contains unescaped double quote — injection possible: %s", search)
+	}
+	if !strings.Contains(search, `test\"inject`) {
+		t.Errorf("$search should contain escaped double quote, got: %s", search)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Security regression: $top parameter tests
+// ---------------------------------------------------------------------------
+
+func TestSearch_SetsTopParameter(t *testing.T) {
+	var capturedQuery url.Values
+	mock := &mockGraphRequester{
+		doRequestFunc: func(ctx context.Context, path string, query url.Values) ([]byte, error) {
+			capturedQuery = query
+			return []byte(`{"value": []}`), nil
+		},
+	}
+
+	resolver := NewResolver(mock)
+	_, err := resolver.Search(context.Background(), "test*", "spn", 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	top := capturedQuery.Get("$top")
+	if top != "25" {
+		t.Errorf("$top = %q, want %q", top, "25")
+	}
+}
+
+func TestSearch_TopCapsAt100(t *testing.T) {
+	var capturedQuery url.Values
+	mock := &mockGraphRequester{
+		doRequestFunc: func(ctx context.Context, path string, query url.Values) ([]byte, error) {
+			capturedQuery = query
+			return []byte(`{"value": []}`), nil
+		},
+	}
+
+	resolver := NewResolver(mock)
+	_, err := resolver.Search(context.Background(), "test*", "spn", 500)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	top := capturedQuery.Get("$top")
+	if top != "100" {
+		t.Errorf("$top = %q, want %q (capped at 100)", top, "100")
+	}
+}

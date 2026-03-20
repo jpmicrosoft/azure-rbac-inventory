@@ -463,3 +463,49 @@ func TestGetAssignments_VerifiesQueryParams(t *testing.T) {
 		t.Errorf("$expand = %q, want it to contain 'accessPackage'", e)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Security regression: OData escaping in principalId filters
+// ---------------------------------------------------------------------------
+
+func TestGetAssignments_EscapesPrincipalID(t *testing.T) {
+	var capturedQuery url.Values
+	mock := &mockGraphRequester{
+		doPagedRequestFunc: func(ctx context.Context, path string, query url.Values) ([]json.RawMessage, error) {
+			capturedQuery = query
+			return nil, nil
+		},
+	}
+
+	checker := NewAccessPackageChecker(mock)
+	_, _ = checker.GetAssignments(context.Background(), "id-with-'quote")
+
+	filter := capturedQuery.Get("$filter")
+	if strings.Contains(filter, "id-with-'quote") {
+		t.Errorf("filter contains unescaped single quote — injection possible: %s", filter)
+	}
+	if !strings.Contains(filter, "id-with-''quote") {
+		t.Errorf("filter should contain doubled single quote, got: %s", filter)
+	}
+}
+
+func TestGetRequests_EscapesPrincipalID(t *testing.T) {
+	var capturedQuery url.Values
+	mock := &mockGraphRequester{
+		doPagedRequestFunc: func(ctx context.Context, path string, query url.Values) ([]json.RawMessage, error) {
+			capturedQuery = query
+			return nil, nil
+		},
+	}
+
+	checker := NewAccessPackageChecker(mock)
+	_, _ = checker.GetRequests(context.Background(), "id-with-'quote")
+
+	filter := capturedQuery.Get("$filter")
+	if strings.Contains(filter, "id-with-'quote") {
+		t.Errorf("filter contains unescaped single quote — injection possible: %s", filter)
+	}
+	if !strings.Contains(filter, "id-with-''quote") {
+		t.Errorf("filter should contain doubled single quote, got: %s", filter)
+	}
+}
