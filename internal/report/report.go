@@ -8,14 +8,15 @@ import (
 
 // Report holds the complete results for an identity check.
 type Report struct {
-	Identity         *identity.Identity              `json:"identity"`
-	Cloud            string                          `json:"cloud"`
-	RBACAssignments  []rbac.RoleAssignment           `json:"rbacAssignments"`
-	DirectoryRoles   []graph.DirectoryRole           `json:"directoryRoles"`
-	AccessPackages   []graph.AccessPackageAssignment `json:"accessPackageAssignments"`
-	AccessRequests   []graph.AccessPackageRequest    `json:"accessPackageRequests"`
-	GroupMemberships []graph.GroupMembership         `json:"groupMemberships"`
-	Warnings         []string                        `json:"warnings,omitempty"`
+	Identity              *identity.Identity              `json:"identity"`
+	Cloud                 string                          `json:"cloud"`
+	RBACAssignments       []rbac.RoleAssignment           `json:"rbacAssignments"`
+	DirectoryRoles        []graph.DirectoryRole           `json:"directoryRoles"`
+	AccessPackages        []graph.AccessPackageAssignment `json:"accessPackageAssignments"`
+	AccessRequests        []graph.AccessPackageRequest    `json:"accessPackageRequests"`
+	GroupMemberships      []graph.GroupMembership         `json:"groupMemberships"`
+	Warnings              []string                        `json:"warnings,omitempty"`
+	SkippedAccessPackages bool                            `json:"skippedAccessPackages,omitempty"`
 }
 
 // MultiReport wraps multiple identity reports with aggregate stats.

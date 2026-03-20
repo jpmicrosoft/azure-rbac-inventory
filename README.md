@@ -9,8 +9,8 @@ Supports **Azure Commercial** and **Azure Government** clouds.
 - **Identity Resolution** — Accepts an object ID or app ID and automatically resolves the identity type (user, SPN, managed identity, app registration, group)
 - **Azure RBAC** — Queries role assignments across all accessible subscriptions at every scope level (management group, subscription, resource group, resource)
 - **Entra ID Directory Roles** — Reports directory role assignments (Global Admin, User Admin, etc.)
-- **Access Packages** — Queries Identity Governance entitlement management for all assignment states (Delivered, Delivering, Pending Approval, Expired, etc.)
-- **Access Package Requests** — Shows pending, approved, and denied access package requests
+- **Access Packages** — Optionally queries Identity Governance entitlement management for all assignment states (Delivered, Delivering, Pending Approval, Expired, etc.) with `--include-access-packages`
+- **Access Package Requests** — Shows pending, approved, and denied access package requests (with `--include-access-packages`)
 - **Group Memberships** — Lists direct and transitive group memberships
 - **Inherited RBAC** — Optionally queries RBAC assignments inherited through group memberships (`--include-groups`)
 - **Pattern Search** — Search by display name, SPN name, or wildcard pattern instead of requiring an exact ID
@@ -39,7 +39,7 @@ The identity running this tool needs these permissions at minimum:
 |---|---|---|---|
 | `Reader` | Subscriptions or Management Groups | List and query RBAC role assignments | Yes |
 | `Directory.Read.All` | Microsoft Graph (Application or Delegated) | Resolve identities, directory roles, group memberships | Yes |
-| `EntitlementManagement.Read.All` | Microsoft Graph (Application or Delegated) | Access package assignments and requests | Optional — tool continues without it |
+| `EntitlementManagement.Read.All` | Microsoft Graph (Application or Delegated) | Access package assignments and requests | Optional — only needed with `--include-access-packages` |
 
 > **Tip:** The tool uses interactive browser authentication by default. Graph permissions are granted as **delegated permissions** — consent to them when prompted during sign-in.
 
@@ -62,6 +62,9 @@ The identity running this tool needs these permissions at minimum:
 
 # Include RBAC inherited through group memberships
 ./azure-rbac-inventory check <object-id> --include-groups
+
+# Include access package assignments and requests
+./azure-rbac-inventory check <object-id> --include-access-packages
 
 # Search by display name or pattern
 ./azure-rbac-inventory check "spn-myapp*" --cloud AzureUSGovernment
@@ -88,6 +91,7 @@ Global Flags:
   -o, --output string          Output format (table|json|csv|markdown) (default "table")
       --subscriptions string   Comma-separated subscription IDs (default: all accessible)
       --include-groups         Include transitive group membership RBAC assignments
+      --include-access-packages  Query access package assignments and requests (requires EntitlementManagement.Read.All)
       --file string            Read identities from file (one per line)
       --type string            Filter identity type (spn|user|group|managed-identity|app|all) (default "all")
       --export string          Export to file (format inferred from extension: .csv, .html, .md, .xlsx, .json)
@@ -102,8 +106,8 @@ Global Flags:
 azure-rbac-inventory --version
 ```
 
-> **Note:** The `--cloud` flag value is **case-sensitive**. Use the exact names shown above:
-> `AzureCloud`, `AzureUSGovernment`, or `AzureChinaCloud`. Lowercase variants like `azurecloud` are not accepted.
+> **Note:** The `--cloud` flag value is **case-insensitive**. The following are all valid:
+> `AzureCloud`, `azurecloud`, `AZURECLOUD`, `AzureUSGovernment`, `azureusgovernment`, `AzureChinaCloud`.
 
 ## Pattern Search
 
@@ -254,7 +258,7 @@ azure-rbac-inventory check <id>
 azure-rbac-inventory check <id> --auth device-code
 ```
 
-> **Tip:** For interactive auth, the tool requires delegated permissions — consent to `Directory.Read.All` when prompted. For access package queries, `EntitlementManagement.Read.All` is also needed.
+> **Tip:** For interactive auth, the tool requires delegated permissions — consent to `Directory.Read.All` when prompted. For access package queries (`--include-access-packages`), `EntitlementManagement.Read.All` is also needed.
 
 ## Required Permissions
 
@@ -264,7 +268,7 @@ The identity running this tool needs:
 |------------|-------|---------|-----------|
 | `Reader` | Subscriptions / Management Groups | Query RBAC role assignments | Yes |
 | `Directory.Read.All` | Microsoft Graph | Resolve identities, query directory roles and group memberships | Yes |
-| `EntitlementManagement.Read.All` | Microsoft Graph | Query access package assignments and requests | Optional — tool continues without it |
+| `EntitlementManagement.Read.All` | Microsoft Graph | Query access package assignments and requests | Optional — only needed with `--include-access-packages` |
 
 > **Tip:** The tool uses interactive browser authentication by default. Graph permissions are granted as **delegated permissions** — consent to them when prompted during sign-in.
 
@@ -341,10 +345,10 @@ Then run the tool again — a new browser prompt will appear for sign-in.
 
 ### 403 Forbidden on Graph API
 
-The tool queries Microsoft Graph for directory roles, group memberships, and access packages. If you see `Graph API error (HTTP 403)`:
+The tool queries Microsoft Graph for directory roles, group memberships, and optionally access packages. If you see `Graph API error (HTTP 403)`:
 
 - **Missing `Directory.Read.All`** — Required for identity resolution, directory role lookups, and group membership queries.
-- **Missing `EntitlementManagement.Read.All`** — Required for access package assignment and request queries. Without it, access package sections will show warnings instead of results.
+- **Missing `EntitlementManagement.Read.All`** — Required when using `--include-access-packages`. Without it, access package queries will fail with 403 errors. If you don't need access packages, simply omit the flag.
 - The tool continues running even when individual queries fail (partial failure model). Check the `Warning:` messages in stderr output to identify which permissions are missing.
 
 ### Empty results
@@ -415,8 +419,8 @@ No. Azure RBAC Inventory is strictly read-only. It only queries Azure ARM and Mi
 **Q: What identity types are supported?**
 Users, service principals (SPNs), managed identities, app registrations, and groups. Use `--type` to filter by a specific type.
 
-**Q: Why do I see "Access package query failed" warnings?**
-The `EntitlementManagement.Read.All` permission is required for access packages. Without it, the tool shows a warning but continues checking RBAC, directory roles, and group memberships.
+**Q: How do I include access package data?**
+Use `--include-access-packages`. This requires the `EntitlementManagement.Read.All` Graph permission. Without the flag, access package sections show "Skipped" instead of querying.
 
 **Q: Can I use this with Azure Government?**
 Yes. Pass `--cloud AzureUSGovernment`. Make sure `az login` is also targeting the Government cloud (`az cloud set --name AzureUSGovernment`). See [Azure Government cloud](#azure-government-cloud).
@@ -453,9 +457,9 @@ azure-rbac-inventory check <id> --subscriptions "sub-id-1,sub-id-2"
 
 ## Notes & Limitations
 
-- **Concurrency** — The tool runs all top-level queries (RBAC, directory roles, access packages, group memberships) in parallel for speed. RBAC subscription queries are additionally parallelized with a concurrency limit of 10 subscriptions at a time. Progress messages are printed to stderr and may interleave.
+- **Concurrency** — The tool runs top-level queries (RBAC, directory roles, group memberships, and optionally access packages) in parallel for speed. RBAC subscription queries are additionally parallelized with a concurrency limit of 10 subscriptions at a time. Progress messages are printed to stderr and may interleave.
 - **Application identities** — Application registrations (`#microsoft.graph.application`) do not support group membership lookups via the Graph API. The group memberships section will return empty for these identities. Service principals associated with the same app registration *do* support group membership lookups.
-- **Access package request limit** — Access package requests are limited to the **50 most recent** results (ordered by `createdDateTime desc`). If the identity has a longer request history, older requests are not returned.
+- **Access package request limit** — When using `--include-access-packages`, access package requests are limited to the **50 most recent** results (ordered by `createdDateTime desc`). If the identity has a longer request history, older requests are not returned.
 - **Dual output** — Use `--export results.json` together with `--output table` to get human-readable table output on screen and machine-readable JSON saved to a file simultaneously. The legacy `--json-file` flag still works but is deprecated — use `--export report.json` instead.
 - **Verbose mode** — `--verbose` currently only adds detail to group RBAC query warnings (e.g., when `--include-groups` encounters a permission error on a specific group). It does not affect other sections.
 - **Eventual consistency** — All Graph API requests include the `ConsistencyLevel: eventual` header. This enables advanced query features but means results may be slightly stale (typically seconds, occasionally minutes) compared to the most recent directory changes.
@@ -501,11 +505,11 @@ azure-rbac-inventory check <id> --subscriptions "sub-id-1,sub-id-2"
 
   [PACKAGES] Access Package Assignments (0)
   ------------------------------------------------------
-    None found.
+    Skipped (use --include-access-packages to query)
 
   [REQUESTS] Access Package Requests (0)
   ------------------------------------------------------
-    None found.
+    Skipped (use --include-access-packages to query)
 
   [GROUPS] Group Memberships (2)
   ------------------------------------------------------

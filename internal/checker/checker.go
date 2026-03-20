@@ -19,19 +19,20 @@ import (
 
 // Config holds all parameters for an identity check.
 type Config struct {
-	IdentityID    string
-	Cloud         string
-	TenantID      string
-	Subscriptions []string
-	IncludeGroups bool
-	Verbose       bool
-	OutputFormat  string
-	JSONFile      string
-	ExportFile    string // export file path
-	IdentityType  string // identity type filter
-	MaxResults    int    // max search results
-	Concurrency   int    // max concurrent checks
-	PerIdentity   bool   // separate output per identity
+	IdentityID            string
+	Cloud                 string
+	TenantID              string
+	Subscriptions         []string
+	IncludeGroups         bool
+	IncludeAccessPackages bool
+	Verbose               bool
+	OutputFormat          string
+	JSONFile              string
+	ExportFile            string // export file path
+	IdentityType          string // identity type filter
+	MaxResults            int    // max search results
+	Concurrency           int    // max concurrent checks
+	PerIdentity           bool   // separate output per identity
 }
 
 // Run executes the identity check: validates inputs, resolves the identity,
@@ -117,29 +118,31 @@ func Run(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environm
 		return nil
 	})
 
-	g.Go(func() error {
-		fmt.Fprint(os.Stderr, "Querying access package assignments...\n")
-		var err error
-		apAssignments, err = apChecker.GetAssignments(gctx, ident.ObjectID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Access package query failed: %v\n", err)
-		} else {
-			fmt.Fprintf(os.Stderr, "Access package assignments: %d found\n", len(apAssignments))
-		}
-		return nil
-	})
+	if cfg.IncludeAccessPackages {
+		g.Go(func() error {
+			fmt.Fprint(os.Stderr, "Querying access package assignments...\n")
+			var err error
+			apAssignments, err = apChecker.GetAssignments(gctx, ident.ObjectID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Access package query failed: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Access package assignments: %d found\n", len(apAssignments))
+			}
+			return nil
+		})
 
-	g.Go(func() error {
-		fmt.Fprint(os.Stderr, "Querying access package requests...\n")
-		var err error
-		apRequests, err = apChecker.GetRequests(gctx, ident.ObjectID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Access package request query failed: %v\n", err)
-		} else {
-			fmt.Fprintf(os.Stderr, "Access package requests: %d found\n", len(apRequests))
-		}
-		return nil
-	})
+		g.Go(func() error {
+			fmt.Fprint(os.Stderr, "Querying access package requests...\n")
+			var err error
+			apRequests, err = apChecker.GetRequests(gctx, ident.ObjectID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Access package request query failed: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Access package requests: %d found\n", len(apRequests))
+			}
+			return nil
+		})
+	}
 
 	g.Go(func() error {
 		fmt.Fprint(os.Stderr, "Querying group memberships...\n")
@@ -163,6 +166,7 @@ func Run(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environm
 	report.AccessRequests = apRequests
 	report.GroupMemberships = groups
 	report.Warnings = allWarnings
+	report.SkippedAccessPackages = !cfg.IncludeAccessPackages
 
 	// If --include-groups, also get RBAC for each group (bounded concurrency)
 	if cfg.IncludeGroups && len(report.GroupMemberships) > 0 {

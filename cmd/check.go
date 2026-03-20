@@ -23,8 +23,10 @@ var checkCmd = &cobra.Command{
 	Short: "Check RBAC and access package assignments for an identity",
 	Long: `Resolves the given object ID, app ID, or display name pattern to an Azure
 identity, then queries all RBAC role assignments, Entra ID directory roles,
-access package assignments, pending requests, and group memberships.
+and group memberships.
 
+Use --include-access-packages to also query access package assignments and
+pending requests (requires EntitlementManagement.Read.All permission).
 Use --file to supply a list of identity IDs or patterns from a file (one per line).
 Use --include-groups to also query RBAC role assignments inherited through
 transitive group memberships.`,
@@ -138,18 +140,19 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	// Process each identity
 	baseCfg := checker.Config{
-		Cloud:         cloudFlag,
-		TenantID:      tenantFlag,
-		Subscriptions: checker.ParseSubscriptions(subscriptionsFlag),
-		IncludeGroups: includeGroupsFlag,
-		Verbose:       verboseFlag,
-		OutputFormat:  outputFlag,
-		JSONFile:      jsonFileFlag,
-		ExportFile:    exportFlag,
-		IdentityType:  typeFlag,
-		MaxResults:    maxResultsFlag,
-		Concurrency:   concurrencyFlag,
-		PerIdentity:   perIdentityFlag,
+		Cloud:                 cloudFlag,
+		TenantID:              tenantFlag,
+		Subscriptions:         checker.ParseSubscriptions(subscriptionsFlag),
+		IncludeGroups:         includeGroupsFlag,
+		IncludeAccessPackages: includeAccessPackagesFlag,
+		Verbose:               verboseFlag,
+		OutputFormat:          outputFlag,
+		JSONFile:              jsonFileFlag,
+		ExportFile:            exportFlag,
+		IdentityType:          typeFlag,
+		MaxResults:            maxResultsFlag,
+		Concurrency:           concurrencyFlag,
+		PerIdentity:           perIdentityFlag,
 	}
 
 	var reports []*reportpkg.Report

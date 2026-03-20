@@ -527,7 +527,7 @@ const htmlSingleTemplate = `<!DOCTYPE html>
       <div class="stat-label">Directory Roles</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">{{len .Report.AccessPackages}}</div>
+      <div class="stat-value">{{if .Report.SkippedAccessPackages}}—{{else}}{{len .Report.AccessPackages}}{{end}}</div>
       <div class="stat-label">Access Packages</div>
     </div>
     <div class="stat-card">
@@ -588,9 +588,11 @@ const htmlSingleTemplate = `<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>Access Package Assignments <span class="section-count">{{len .Report.AccessPackages}}</span></summary>
+    <summary>Access Package Assignments <span class="section-count">{{if .Report.SkippedAccessPackages}}skipped{{else}}{{len .Report.AccessPackages}}{{end}}</span></summary>
     <div class="section-body">
-    {{if .Report.AccessPackages}}
+    {{if .Report.SkippedAccessPackages}}
+    <p class="empty-msg">Skipped (use --include-access-packages to query)</p>
+    {{else if .Report.AccessPackages}}
       <div class="table-wrap">
       <table>
         <thead><tr><th>Package Name</th><th>Catalog</th><th>Status</th><th>Expiration</th></tr></thead>
@@ -611,9 +613,11 @@ const htmlSingleTemplate = `<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>Access Package Requests <span class="section-count">{{len .Report.AccessRequests}}</span></summary>
+    <summary>Access Package Requests <span class="section-count">{{if .Report.SkippedAccessPackages}}skipped{{else}}{{len .Report.AccessRequests}}{{end}}</span></summary>
     <div class="section-body">
-    {{if .Report.AccessRequests}}
+    {{if .Report.SkippedAccessPackages}}
+    <p class="empty-msg">Skipped (use --include-access-packages to query)</p>
+    {{else if .Report.AccessRequests}}
       <div class="table-wrap">
       <table>
         <thead><tr><th>Package Name</th><th>Request Type</th><th>Status</th><th>Created</th></tr></thead>
@@ -727,7 +731,7 @@ const htmlMultiTemplate = `<!DOCTYPE html>
       <div class="stat-label">Directory Roles</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">{{len $id.Report.AccessPackages}}</div>
+      <div class="stat-value">{{if $id.Report.SkippedAccessPackages}}—{{else}}{{len $id.Report.AccessPackages}}{{end}}</div>
       <div class="stat-label">Access Packages</div>
     </div>
     <div class="stat-card">
@@ -788,9 +792,11 @@ const htmlMultiTemplate = `<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>Access Package Assignments <span class="section-count">{{len $id.Report.AccessPackages}}</span></summary>
+    <summary>Access Package Assignments <span class="section-count">{{if $id.Report.SkippedAccessPackages}}skipped{{else}}{{len $id.Report.AccessPackages}}{{end}}</span></summary>
     <div class="section-body">
-    {{if $id.Report.AccessPackages}}
+    {{if $id.Report.SkippedAccessPackages}}
+    <p class="empty-msg">Skipped (use --include-access-packages to query)</p>
+    {{else if $id.Report.AccessPackages}}
       <div class="table-wrap">
       <table>
         <thead><tr><th>Package Name</th><th>Catalog</th><th>Status</th><th>Expiration</th></tr></thead>
@@ -811,9 +817,11 @@ const htmlMultiTemplate = `<!DOCTYPE html>
   </details>
 
   <details>
-    <summary>Access Package Requests <span class="section-count">{{len $id.Report.AccessRequests}}</span></summary>
+    <summary>Access Package Requests <span class="section-count">{{if $id.Report.SkippedAccessPackages}}skipped{{else}}{{len $id.Report.AccessRequests}}{{end}}</span></summary>
     <div class="section-body">
-    {{if $id.Report.AccessRequests}}
+    {{if $id.Report.SkippedAccessPackages}}
+    <p class="empty-msg">Skipped (use --include-access-packages to query)</p>
+    {{else if $id.Report.AccessRequests}}
       <div class="table-wrap">
       <table>
         <thead><tr><th>Package Name</th><th>Request Type</th><th>Status</th><th>Created</th></tr></thead>

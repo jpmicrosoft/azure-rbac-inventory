@@ -69,8 +69,8 @@ func PrintTable(rpt *reportpkg.Report) {
 	printHeader(rpt)
 	printRBACAssignments(rpt.RBACAssignments)
 	printDirectoryRoles(rpt.DirectoryRoles)
-	printAccessPackages(rpt.AccessPackages)
-	printAccessRequests(rpt.AccessRequests)
+	printAccessPackages(rpt.AccessPackages, rpt.SkippedAccessPackages)
+	printAccessRequests(rpt.AccessRequests, rpt.SkippedAccessPackages)
 	printGroupMemberships(rpt.GroupMemberships)
 	printWarnings(rpt.Warnings)
 }
@@ -285,9 +285,15 @@ func printDirectoryRoles(roles []graph.DirectoryRole) {
 	fmt.Println()
 }
 
-func printAccessPackages(packages []graph.AccessPackageAssignment) {
+func printAccessPackages(packages []graph.AccessPackageAssignment, skipped bool) {
 	fmt.Printf("  [PACKAGES] Access Package Assignments (%d)\n", len(packages))
 	fmt.Println("  " + strings.Repeat("-", 54))
+
+	if skipped {
+		fmt.Println("    Skipped (use --include-access-packages to query)")
+		fmt.Println()
+		return
+	}
 
 	if len(packages) == 0 {
 		fmt.Println("    None found.")
@@ -309,9 +315,15 @@ func printAccessPackages(packages []graph.AccessPackageAssignment) {
 	fmt.Println()
 }
 
-func printAccessRequests(requests []graph.AccessPackageRequest) {
+func printAccessRequests(requests []graph.AccessPackageRequest, skipped bool) {
 	fmt.Printf("  [REQUESTS] Access Package Requests (%d)\n", len(requests))
 	fmt.Println("  " + strings.Repeat("-", 54))
+
+	if skipped {
+		fmt.Println("    Skipped (use --include-access-packages to query)")
+		fmt.Println()
+		return
+	}
 
 	if len(requests) == 0 {
 		fmt.Println("    None found.")

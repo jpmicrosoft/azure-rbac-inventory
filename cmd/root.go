@@ -8,20 +8,21 @@ import (
 )
 
 var (
-	cloudFlag         string
-	tenantFlag        string
-	outputFlag        string
-	jsonFileFlag      string
-	subscriptionsFlag string
-	includeGroupsFlag bool
-	verboseFlag       bool
-	authMethodFlag    string
-	fileFlag          string // --file: path to file with identity IDs/patterns
-	typeFlag          string // --type: identity type filter
-	exportFlag        string // --export: export file path (format from extension)
-	perIdentityFlag   bool   // --per-identity: separate output per identity
-	maxResultsFlag    int    // --max-results: max identities from pattern search
-	concurrencyFlag   int    // --concurrency: max concurrent identity checks
+	cloudFlag                 string
+	tenantFlag                string
+	outputFlag                string
+	jsonFileFlag              string
+	subscriptionsFlag         string
+	includeGroupsFlag         bool
+	includeAccessPackagesFlag bool
+	verboseFlag               bool
+	authMethodFlag            string
+	fileFlag                  string // --file: path to file with identity IDs/patterns
+	typeFlag                  string // --type: identity type filter
+	exportFlag                string // --export: export file path (format from extension)
+	perIdentityFlag           bool   // --per-identity: separate output per identity
+	maxResultsFlag            int    // --max-results: max identities from pattern search
+	concurrencyFlag           int    // --concurrency: max concurrent identity checks
 )
 
 var rootCmd = &cobra.Command{
@@ -46,6 +47,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&jsonFileFlag, "json-file", "", "Export results to JSON file")
 	rootCmd.PersistentFlags().StringVar(&subscriptionsFlag, "subscriptions", "", "Comma-separated subscription IDs (default: all accessible)")
 	rootCmd.PersistentFlags().BoolVar(&includeGroupsFlag, "include-groups", false, "Include transitive group membership RBAC assignments")
+	rootCmd.PersistentFlags().BoolVar(&includeAccessPackagesFlag, "include-access-packages", false, "Query access package assignments and requests (requires EntitlementManagement.Read.All)")
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "Verbose output")
 	rootCmd.PersistentFlags().StringVar(&authMethodFlag, "auth", "interactive", "Authentication method (interactive|device-code)")
 	rootCmd.PersistentFlags().StringVar(&fileFlag, "file", "", "Read identity IDs/patterns from file (one per line)")
