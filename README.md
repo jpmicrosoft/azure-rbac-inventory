@@ -405,6 +405,37 @@ If you see `authentication failed:` errors:
 - **Browser did not open** — On headless systems (SSH, containers), use `--auth device-code` instead.
 - **Wrong tenant** — If you're getting `authorization_request_denied` errors, verify you're authenticating against the correct tenant with `--tenant <tenant-id>`.
 
+### Azure CLI (`--auth azurecli`) errors
+
+**InteractionRequired errors:** Azure CLI interactive login (`az login`) scopes sessions to a single resource. The tool needs both Graph and ARM access, which can cause `InteractionRequired` failures. Solutions:
+
+- **For CI/CD (recommended):** Use service principal login, which grants access to all resources the SPN has permissions for:
+  ```bash
+  az login --service-principal -u <app-id> -p <secret> --tenant <tenant-id>
+  ```
+- **For interactive use:** Use `--auth interactive` (the default) instead of `--auth azurecli`.
+- **Stale token cache:** If you previously ran `az login --scope`, the token cache may be corrupted. Clear it:
+  ```bash
+  az account clear
+  az login
+  ```
+
+**403 Authorization_RequestDenied with SPN:** The service principal is missing Graph API permissions. Grant `Directory.Read.All` as an **application permission**:
+```bash
+# Get your SPN's app ID
+az ad sp list --display-name "<spn-name>" --query "[].appId" -o tsv
+
+# Grant Directory.Read.All (Application permission)
+az ad app permission add --id <app-id> \
+  --api 00000003-0000-0000-c000-000000000000 \
+  --api-permissions 7ab1d382-f21e-4acd-a863-ba3e13f7da61=Role
+
+# Admin consent (requires Global Admin or Privileged Role Admin)
+az ad app permission admin-consent --id <app-id>
+```
+
+> **Note:** Permission changes may take a few minutes to propagate. If you still see 403 after granting, wait 2-5 minutes and retry.
+
 ### "Token expired" / "AADSTS700024"
 
 The cached token expired. Clear the token cache and re-authenticate:
@@ -523,7 +554,9 @@ Yes. Three non-interactive authentication methods are available:
 |---|---|---|
 | Service principal | `--auth environment` | Set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` as env vars |
 | Managed identity | `--auth managed-identity` | Azure-hosted compute (VMs, AKS, Azure DevOps agents) |
-| Azure CLI | `--auth azurecli` | After `az login` or `azure/login@v2` GitHub Action |
+| Azure CLI | `--auth azurecli` | After `az login --service-principal` or `azure/login@v2` GitHub Action |
+
+The service principal must have `Directory.Read.All` (Application permission) and `Reader` on target subscriptions. See [Troubleshooting > Azure CLI errors](#azure-cli---auth-azurecli-errors) if you encounter 403 or InteractionRequired errors.
 
 Use `--output json` for machine-readable output:
 ```bash
