@@ -298,5 +298,5 @@ func perIdentityFilename(basePath string, displayName string, index int) string 
 	if len(safeName) > 80 {
 		safeName = safeName[:80]
 	}
-	return fmt.Sprintf("%s-%s%s", base, safeName, ext)
+	return fmt.Sprintf("%s-%03d-%s%s", base, index, safeName, ext)
 }

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"time"
 
@@ -43,15 +42,15 @@ Supports both Azure Commercial and Azure Government clouds.`,
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cloudFlag, "cloud", "AzureCloud", "Azure cloud name (AzureCloud|AzureUSGovernment|AzureChinaCloud)")
-	rootCmd.PersistentFlags().StringVar(&tenantFlag, "tenant", "", "Tenant ID (uses default from credential if not set)")
+	rootCmd.PersistentFlags().StringVar(&cloudFlag, "cloud", envOrDefault("AZURE_RBAC_CLOUD", "AzureCloud"), "Azure cloud name (AzureCloud|AzureUSGovernment|AzureChinaCloud)")
+	rootCmd.PersistentFlags().StringVar(&tenantFlag, "tenant", os.Getenv("AZURE_TENANT_ID"), "Tenant ID (uses default from credential if not set)")
 	rootCmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", "table", "Output format (table|json|csv|markdown)")
 	rootCmd.PersistentFlags().StringVar(&jsonFileFlag, "json-file", "", "Export results to JSON file")
-	rootCmd.PersistentFlags().StringVar(&subscriptionsFlag, "subscriptions", "", "Comma-separated subscription IDs (default: all accessible)")
+	rootCmd.PersistentFlags().StringVar(&subscriptionsFlag, "subscriptions", os.Getenv("AZURE_RBAC_SUBSCRIPTIONS"), "Comma-separated subscription IDs (default: all accessible)")
 	rootCmd.PersistentFlags().BoolVar(&includeGroupRBACFlag, "include-group-rbac", false, "Also query RBAC role assignments inherited through group memberships (group list always shown)")
 	rootCmd.PersistentFlags().BoolVar(&includeAccessPackagesFlag, "include-access-packages", false, "Query access package assignments and requests (requires EntitlementManagement.Read.All)")
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "Verbose output")
-	rootCmd.PersistentFlags().StringVar(&authMethodFlag, "auth", "interactive", "Authentication method (interactive|device-code)")
+	rootCmd.PersistentFlags().StringVar(&authMethodFlag, "auth", envOrDefault("AZURE_RBAC_AUTH", "interactive"), "Authentication method (interactive|device-code)")
 	rootCmd.PersistentFlags().StringVar(&fileFlag, "file", "", "Read identity IDs/patterns from file (one per line)")
 	rootCmd.PersistentFlags().StringVar(&typeFlag, "type", "all", "Identity type filter (all|spn|user|group|managed-identity|app)")
 	rootCmd.PersistentFlags().StringVar(&exportFlag, "export", "", "Export to file (format auto-detected from extension: .csv/.html/.md/.xlsx/.json)")
@@ -61,6 +60,14 @@ func init() {
 	rootCmd.PersistentFlags().DurationVar(&timeoutFlag, "timeout", 30*time.Minute, "Global execution timeout (e.g. 10m, 1h)")
 }
 
+// envOrDefault returns the value of an environment variable, or the fallback if unset.
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 // SetVersion sets the version string for the CLI.
 func SetVersion(v string) {
 	rootCmd.Version = v
@@ -68,9 +75,5 @@ func SetVersion(v string) {
 
 // Execute runs the root command.
 func Execute() error {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return err
-	}
-	return nil
+	return rootCmd.Execute()
 }

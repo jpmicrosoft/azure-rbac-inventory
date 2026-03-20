@@ -97,7 +97,8 @@ Global Flags:
       --export string          Export to file (format inferred from extension: .csv, .html, .md, .xlsx, .json)
       --per-identity           Separate output per identity (default false)
       --max-results int        Max search results for pattern matching (default 50)
-      --concurrency int        Max concurrent identity checks (default 5)
+      --concurrency int        Max concurrent identity checks (default 10)
+      --timeout duration       Global execution timeout (default 30m)
       --json-file string       [Deprecated] Export results to JSON file — use --export report.json instead
   -v, --verbose                Verbose output
   -h, --help                   help for azure-rbac-inventory
@@ -141,7 +142,7 @@ azure-rbac-inventory check --file identities.txt --per-identity --export reports
 ```
 
 Use `--per-identity` to produce separate output sections per identity.
-Use `--concurrency` to control how many identities are checked in parallel (default: 5).
+Use `--concurrency` to control how many identities are checked in parallel (default: 10).
 
 ## File Input Formats
 
@@ -224,22 +225,26 @@ azure-rbac-inventory check <id> --output markdown
 
 ## Flags Reference
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--file` | Read identities from file | — |
-| `--type` | Filter identity type (`spn\|user\|group\|managed-identity\|app\|all`) | `all` |
-| `--export` | Export to file (format from extension: `.csv`, `.html`, `.md`, `.xlsx`, `.json`) | — |
-| `--per-identity` | Separate output per identity | `false` |
-| `--max-results` | Max search results | `50` |
-| `--concurrency` | Max concurrent checks | `10` |
-| `--auth` | Authentication method (`interactive\|device-code`) | `interactive` |
-| `--output` | Console format: `table\|json\|csv\|markdown` | `table` |
-| `--cloud` | Azure cloud name | `AzureCloud` |
-| `--tenant` | Tenant ID | auto-detected |
-| `--subscriptions` | Comma-separated subscription IDs | all accessible |
-| `--include-group-rbac` | Also query RBAC inherited through group memberships | `false` |
-| `--json-file` | **Deprecated.** Export results to JSON file — use `--export report.json` instead | — |
-| `--verbose` | Verbose output | `false` |
+| Flag | Description | Default | Env Var |
+|------|-------------|---------|---------|
+| `--file` | Read identities from file | — | — |
+| `--type` | Filter identity type (`spn\|user\|group\|managed-identity\|app\|all`) | `all` | — |
+| `--export` | Export to file (format from extension: `.csv`, `.html`, `.md`, `.xlsx`, `.json`) | — | — |
+| `--per-identity` | Separate output per identity | `false` | — |
+| `--max-results` | Max search results | `50` | — |
+| `--concurrency` | Max concurrent checks | `10` | — |
+| `--timeout` | Global execution timeout | `30m` | — |
+| `--auth` | Authentication method (`interactive\|device-code`) | `interactive` | `AZURE_RBAC_AUTH` |
+| `--output` | Console format: `table\|json\|csv\|markdown` | `table` | — |
+| `--cloud` | Azure cloud name | `AzureCloud` | `AZURE_RBAC_CLOUD` |
+| `--tenant` | Tenant ID | auto-detected | `AZURE_TENANT_ID` |
+| `--subscriptions` | Comma-separated subscription IDs | all accessible | `AZURE_RBAC_SUBSCRIPTIONS` |
+| `--include-group-rbac` | Also query RBAC inherited through group memberships | `false` | — |
+| `--include-access-packages` | Query access package assignments and requests | `false` | — |
+| `--json-file` | **Deprecated.** Export results to JSON file — use `--export report.json` instead | — | — |
+| `--verbose` | Verbose output | `false` | — |
+
+> **Environment variables** provide defaults for flags. Flag values always take precedence when explicitly set.
 
 ## Authentication
 
@@ -391,7 +396,7 @@ The tool deduplicates by default. If you still see duplicates when using `--incl
 
 RBAC queries run per-subscription. To improve performance:
 - Use `--subscriptions sub-id-1,sub-id-2` to limit scope to specific subscriptions
-- Increase `--concurrency` (default: 5) for parallel processing
+- Increase `--concurrency` (default: 10) for parallel processing
 
 ### Azure Government cloud
 
@@ -441,9 +446,9 @@ Yes. Use `--export report.html` for a polished HTML report, or `--export report.
 Direct means the role is assigned directly to the identity. Inherited means it came through a group membership (shown when using `--include-group-rbac`).
 
 **Q: Does the tool work in CI/CD pipelines?**
-Yes. Use `--auth env` with `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` environment variables, and `--output json` for machine-readable output:
+Use `--auth device-code` for non-interactive environments where a browser is not available. For fully automated CI/CD pipelines, environment variable-based authentication is planned for a future release. Use `--output json` for machine-readable output:
 ```bash
-azure-rbac-inventory check <id> --auth env --output json --export report.json
+azure-rbac-inventory check <id> --auth device-code --output json --export report.json
 ```
 
 **Q: What happens if I don't have permissions to all subscriptions?**

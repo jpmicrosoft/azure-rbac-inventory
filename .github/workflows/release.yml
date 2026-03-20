@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Build all platforms
+        run: |
+          mkdir -p dist
+          LDFLAGS="-s -w -X main.version=${{ env.VERSION }}"
+
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-windows-amd64.exe .
+          GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-windows-arm64.exe .
+          GOOS=linux   GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-linux-amd64 .
+          GOOS=linux   GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-linux-arm64 .
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-darwin-amd64 .
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/azure-rbac-inventory-darwin-arm64 .
+
+      - name: Compress artifacts
+        run: |
+          cd dist
+          tar czf azure-rbac-inventory-linux-amd64.tar.gz   azure-rbac-inventory-linux-amd64
+          tar czf azure-rbac-inventory-linux-arm64.tar.gz   azure-rbac-inventory-linux-arm64
+          tar czf azure-rbac-inventory-darwin-amd64.tar.gz  azure-rbac-inventory-darwin-amd64
+          tar czf azure-rbac-inventory-darwin-arm64.tar.gz  azure-rbac-inventory-darwin-arm64
+          zip     azure-rbac-inventory-windows-amd64.zip    azure-rbac-inventory-windows-amd64.exe
+          zip     azure-rbac-inventory-windows-arm64.zip    azure-rbac-inventory-windows-arm64.exe
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz *.zip > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS.txt

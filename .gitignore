@@ -10,8 +10,6 @@ msal_token_cache*
 
 # Report exports (contain sensitive RBAC data)
 *.json
-!go.mod
-!go.sum
 !examples/*.json
 *.csv
 *.html
