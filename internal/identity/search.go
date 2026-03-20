@@ -70,6 +70,11 @@ func escapeOData(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
+// escapeODataSearch escapes double quotes in OData $search values.
+func escapeODataSearch(s string) string {
+	return strings.ReplaceAll(s, `"`, `\"`)
+}
+
 // Search queries Graph API to find identities matching the given pattern.
 // identityType filters results: "spn", "user", "group", "managed-identity", "app", "all".
 // maxResults caps the number of results returned.
@@ -97,7 +102,7 @@ func (r *Resolver) Search(ctx context.Context, pattern string, identityType stri
 			return nil, ctx.Err()
 		}
 
-		results, err := r.searchEndpoint(ctx, ep, term, isPrefix, isContains, isExact, identityType)
+		results, err := r.searchEndpoint(ctx, ep, term, isPrefix, isContains, isExact, identityType, maxResults)
 		if err != nil {
 			return nil, fmt.Errorf("searching %s: %w", ep.source, err)
 		}
@@ -149,8 +154,16 @@ func (r *Resolver) searchEndpoint(
 	term string,
 	isPrefix, isContains, isExact bool,
 	identityType string,
+	maxResults int,
 ) ([]*SearchResult, error) {
 	query := url.Values{}
+
+	// Limit server-side response size
+	top := maxResults
+	if top <= 0 || top > 100 {
+		top = 100
+	}
+	query.Set("$top", fmt.Sprintf("%d", top))
 
 	switch {
 	case isPrefix:
@@ -164,7 +177,7 @@ func (r *Resolver) searchEndpoint(
 		}
 		query.Set("$filter", filter)
 	case isContains:
-		query.Set("$search", fmt.Sprintf(`"displayName:%s"`, term))
+		query.Set("$search", fmt.Sprintf(`"displayName:%s"`, escapeODataSearch(term)))
 		query.Set("$count", "true")
 		if identityType == "managed-identity" {
 			query.Set("$filter", "servicePrincipalType eq 'ManagedIdentity'")

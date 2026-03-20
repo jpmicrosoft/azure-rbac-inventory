@@ -38,7 +38,7 @@ func NewAccessPackageChecker(client GraphRequester) *AccessPackageChecker {
 // GetAssignments retrieves all access package assignments for a principal.
 func (a *AccessPackageChecker) GetAssignments(ctx context.Context, principalID string) ([]AccessPackageAssignment, error) {
 	query := url.Values{}
-	query.Set("$filter", fmt.Sprintf("target/objectId eq '%s'", principalID))
+	query.Set("$filter", fmt.Sprintf("target/objectId eq '%s'", escapeODataValue(principalID)))
 	query.Set("$expand", "accessPackage($expand=catalog),target")
 
 	items, err := a.client.DoPagedRequest(ctx, "/v1.0/identityGovernance/entitlementManagement/assignments", query)
@@ -88,7 +88,7 @@ func (a *AccessPackageChecker) GetAssignments(ctx context.Context, principalID s
 // GetRequests retrieves access package requests for a principal (pending, denied, etc.).
 func (a *AccessPackageChecker) GetRequests(ctx context.Context, principalID string) ([]AccessPackageRequest, error) {
 	query := url.Values{}
-	query.Set("$filter", fmt.Sprintf("requestor/objectId eq '%s'", principalID))
+	query.Set("$filter", fmt.Sprintf("requestor/objectId eq '%s'", escapeODataValue(principalID)))
 	query.Set("$expand", "accessPackage")
 	query.Set("$orderby", "createdDateTime desc")
 	query.Set("$top", "50")

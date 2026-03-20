@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strings"
 )
 
 var roleDefIDRegex = regexp.MustCompile(
@@ -37,7 +38,7 @@ func NewDirectoryRoleChecker(client GraphRequester) *DirectoryRoleChecker {
 // GetRoleAssignments retrieves all directory role assignments for a principal.
 func (d *DirectoryRoleChecker) GetRoleAssignments(ctx context.Context, principalID string) ([]DirectoryRole, error) {
 	query := url.Values{}
-	query.Set("$filter", fmt.Sprintf("principalId eq '%s'", principalID))
+	query.Set("$filter", fmt.Sprintf("principalId eq '%s'", escapeODataValue(principalID)))
 	query.Set("$expand", "roleDefinition")
 
 	items, err := d.client.DoPagedRequest(ctx, "/v1.0/roleManagement/directory/roleAssignments", query)
@@ -95,4 +96,9 @@ func (d *DirectoryRoleChecker) resolveRoleName(ctx context.Context, roleDefID st
 	}
 
 	return def.DisplayName
+}
+
+// escapeODataValue escapes single quotes for OData filter expressions.
+func escapeODataValue(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }

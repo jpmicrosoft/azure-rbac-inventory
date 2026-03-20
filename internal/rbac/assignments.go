@@ -143,7 +143,7 @@ func (c *Checker) getAssignmentsForSubscription(ctx context.Context, subscriptio
 		return nil, fmt.Errorf("failed to create role definitions client: %w", err)
 	}
 
-	filter := fmt.Sprintf("assignedTo('%s')", principalID)
+	filter := fmt.Sprintf("assignedTo('%s')", escapeARMFilter(principalID))
 	pager := assignClient.NewListForSubscriptionPager(&armauthorization.RoleAssignmentsClientListForSubscriptionOptions{
 		Filter: &filter,
 	})
@@ -267,4 +267,9 @@ func deduplicateAssignments(assignments []RoleAssignment) []RoleAssignment {
 		unique = append(unique, a)
 	}
 	return unique
+}
+
+// escapeARMFilter escapes single quotes in ARM OData filter values.
+func escapeARMFilter(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }

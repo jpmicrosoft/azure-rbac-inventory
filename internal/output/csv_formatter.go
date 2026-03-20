@@ -20,6 +20,27 @@ var csvHeader = []string{
 // CSVFormatter implements the Formatter interface for CSV output.
 type CSVFormatter struct{}
 
+// sanitizeCSVCell prefixes cells that start with formula-trigger characters
+// to prevent spreadsheet formula injection when opened in Excel.
+func sanitizeCSVCell(s string) string {
+	if len(s) > 0 {
+		switch s[0] {
+		case '=', '+', '-', '@', '\t', '\r':
+			return "'" + s
+		}
+	}
+	return s
+}
+
+// sanitizeCSVRow applies formula sanitization to all cells in a row.
+func sanitizeCSVRow(row []string) []string {
+	out := make([]string, len(row))
+	for i, cell := range row {
+		out[i] = sanitizeCSVCell(cell)
+	}
+	return out
+}
+
 // FormatReport formats a single identity report as CSV.
 func (f *CSVFormatter) FormatReport(rpt *report.Report) ([]byte, error) {
 	return f.FormatMultiReport([]*report.Report{rpt})
@@ -43,51 +64,51 @@ func (f *CSVFormatter) FormatMultiReport(reports []*report.Report) ([]byte, erro
 		cloud := rpt.Cloud
 
 		for _, a := range rpt.RBACAssignments {
-			if err := w.Write([]string{
+			if err := w.Write(sanitizeCSVRow([]string{
 				name, objectID, idType, cloud,
 				"RBAC", a.RoleName, a.Scope, a.ScopeType,
 				a.PrincipalType, "", a.AssignmentType,
-			}); err != nil {
+			})); err != nil {
 				return nil, err
 			}
 		}
 
 		for _, r := range rpt.DirectoryRoles {
-			if err := w.Write([]string{
+			if err := w.Write(sanitizeCSVRow([]string{
 				name, objectID, idType, cloud,
 				"DirectoryRole", r.RoleName, "", "",
 				r.RoleID, r.Status, "",
-			}); err != nil {
+			})); err != nil {
 				return nil, err
 			}
 		}
 
 		for _, p := range rpt.AccessPackages {
-			if err := w.Write([]string{
+			if err := w.Write(sanitizeCSVRow([]string{
 				name, objectID, idType, cloud,
 				"AccessPackage", p.PackageName, "", "",
 				p.CatalogName, p.Status, p.ExpirationDate,
-			}); err != nil {
+			})); err != nil {
 				return nil, err
 			}
 		}
 
 		for _, r := range rpt.AccessRequests {
-			if err := w.Write([]string{
+			if err := w.Write(sanitizeCSVRow([]string{
 				name, objectID, idType, cloud,
 				"AccessPackageRequest", r.PackageName, "", "",
 				r.RequestType, r.Status, r.CreatedDate,
-			}); err != nil {
+			})); err != nil {
 				return nil, err
 			}
 		}
 
 		for _, g := range rpt.GroupMemberships {
-			if err := w.Write([]string{
+			if err := w.Write(sanitizeCSVRow([]string{
 				name, objectID, idType, cloud,
 				"GroupMembership", g.GroupName, "", "",
 				g.GroupType, "", g.Membership,
-			}); err != nil {
+			})); err != nil {
 				return nil, err
 			}
 		}
