@@ -31,7 +31,3 @@ linters:
       - linters:
           - lll
         source: "^//go:generate "
-
-output:
-  max-issues-per-linter: 50
-  max-same-issues: 5
