@@ -89,9 +89,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	// Pre-acquire tokens for both API scopes sequentially to avoid double browser prompts.
-	// Skip for non-interactive methods where browser prompts don't apply.
-	if !auth.IsNonInteractive(authMethodFlag) {
-		if err := auth.PreAuthenticate(ctx, cred, env); err != nil {
+	// Also validates azurecli has required scopes. Skip for environment/managed-identity.
+	if auth.NeedsPreAuth(authMethodFlag) {
+		if err := auth.PreAuthenticate(ctx, cred, env, authMethodFlag); err != nil {
 			return fmt.Errorf("pre-authentication failed: %w", err)
 		}
 	}

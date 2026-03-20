@@ -115,3 +115,23 @@ func TestIsNonInteractive(t *testing.T) {
 		}
 	}
 }
+
+func TestNeedsPreAuth(t *testing.T) {
+	tests := []struct {
+		method string
+		want   bool
+	}{
+		{"interactive", true},
+		{"device-code", true},
+		{"", true},
+		{"azurecli", true},
+		{"environment", false},
+		{"managed-identity", false},
+	}
+	for _, tt := range tests {
+		got := NeedsPreAuth(tt.method)
+		if got != tt.want {
+			t.Errorf("NeedsPreAuth(%q) = %v, want %v", tt.method, got, tt.want)
+		}
+	}
+}

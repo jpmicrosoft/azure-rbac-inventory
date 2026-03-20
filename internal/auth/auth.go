@@ -26,6 +26,19 @@ func IsNonInteractive(method string) bool {
 	}
 }
 
+// NeedsPreAuth returns true for auth methods that benefit from sequential
+// token pre-acquisition. Interactive methods need it to avoid double browser
+// prompts; azurecli needs it to surface scope errors early with clear hints.
+// Environment and managed-identity handle scopes automatically.
+func NeedsPreAuth(method string) bool {
+	switch method {
+	case "environment", "managed-identity":
+		return false
+	default:
+		return true
+	}
+}
+
 // newCache creates a persistent token cache, falling back to an empty cache on error.
 func newCache() azidentity.Cache {
 	c, err := cache.New(nil)
@@ -84,13 +97,17 @@ func GetCredential(env cloudenv.Environment, tenantID string, authMethod string)
 
 // PreAuthenticate acquires tokens for both Graph and ARM scopes sequentially.
 // This prevents double browser prompts when concurrent goroutines later request
-// tokens for different scopes simultaneously.
-func PreAuthenticate(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environment) error {
+// tokens for different scopes simultaneously. For azurecli, it surfaces scope
+// errors early with actionable hints.
+func PreAuthenticate(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environment, authMethod string) error {
 	fmt.Fprint(os.Stderr, "Acquiring Graph API token... ")
 	_, err := cred.GetToken(ctx, policy.TokenRequestOptions{
 		Scopes: []string{env.GraphScope},
 	})
 	if err != nil {
+		if authMethod == "azurecli" {
+			return fmt.Errorf("failed to acquire Graph token: %w\n\nHint: Azure CLI needs Graph API access. Run:\n  az login --scope %s", err, env.GraphScope)
+		}
 		return fmt.Errorf("failed to acquire Graph token: %w", err)
 	}
 	fmt.Fprintln(os.Stderr, "OK")
@@ -100,6 +117,9 @@ func PreAuthenticate(ctx context.Context, cred azcore.TokenCredential, env cloud
 		Scopes: []string{env.ARMScope},
 	})
 	if err != nil {
+		if authMethod == "azurecli" {
+			return fmt.Errorf("failed to acquire ARM token: %w\n\nHint: Azure CLI needs ARM access. Run:\n  az login --scope %s", err, env.ARMScope)
+		}
 		return fmt.Errorf("failed to acquire ARM token: %w", err)
 	}
 	fmt.Fprintln(os.Stderr, "OK")

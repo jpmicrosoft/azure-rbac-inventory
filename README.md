@@ -279,12 +279,17 @@ azure-rbac-inventory check <id> --auth environment --output json
 # CI/CD: managed identity (Azure-hosted runners)
 azure-rbac-inventory check <id> --auth managed-identity --output json
 
-# CI/CD: after az login
-az login --service-principal -u <app-id> -p <secret> --tenant <tenant-id>
+# CI/CD: after az login (must include Graph scope)
+az login --scope https://graph.microsoft.com/.default
 azure-rbac-inventory check <id> --auth azurecli --output json
 ```
 
 > **Tip:** For interactive auth, the tool requires delegated permissions — consent to `Directory.Read.All` when prompted. For CI/CD auth methods (`environment`, `managed-identity`, `azurecli`), use **application permissions** granted via app registration in Entra ID. For access package queries (`--include-access-packages`), `EntitlementManagement.Read.All` is also needed.
+
+> **Important:** When using `--auth azurecli`, the Azure CLI session must have Graph API access. If you see `InteractionRequired` errors, re-login with:
+> ```bash
+> az login --scope https://graph.microsoft.com/.default
+> ```
 
 ### CI/CD Pipeline Examples
 
