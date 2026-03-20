@@ -82,6 +82,11 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
+	// Pre-acquire tokens for both API scopes sequentially to avoid double browser prompts
+	if err := auth.PreAuthenticate(ctx, cred, env); err != nil {
+		return fmt.Errorf("pre-authentication failed: %w", err)
+	}
+
 	// Resolve all inputs to concrete identity IDs (expand patterns)
 	var resolvedIDs []string
 	graphClient := graph.NewClient(cred, env)

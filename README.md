@@ -41,18 +41,15 @@ The identity running this tool needs these permissions at minimum:
 | `Directory.Read.All` | Microsoft Graph (Application or Delegated) | Resolve identities, directory roles, group memberships | Yes |
 | `EntitlementManagement.Read.All` | Microsoft Graph (Application or Delegated) | Access package assignments and requests | Optional — tool continues without it |
 
-> **Tip:** For service principal auth, these Graph permissions must be granted as **Application permissions** with admin consent. For interactive/CLI auth, they can be delegated permissions.
+> **Tip:** The tool uses interactive browser authentication by default. Graph permissions are granted as **delegated permissions** — consent to them when prompted during sign-in.
 
 ## Quick Start
 
 ```bash
 # Download the binary for your platform from Releases (or build from source)
 
-# Login to Azure (any of these methods work)
-az login                          # Interactive browser login
-az login --service-principal ...  # Service principal
-# Or set environment variables for SPN auth:
-#   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+# Login to Azure
+# The tool uses interactive browser login by default
 
 # Check an identity
 ./azure-rbac-inventory check <object-id-or-app-id>
@@ -67,7 +64,7 @@ az login --service-principal ...  # Service principal
 ./azure-rbac-inventory check <object-id> --include-groups
 
 # Search by display name or pattern
-./azure-rbac-inventory check "spn-myapp*" --cloud AzureUSGovernment --auth interactive
+./azure-rbac-inventory check "spn-myapp*" --cloud AzureUSGovernment
 
 # Check a managed identity by name
 ./azure-rbac-inventory check "my-managed-identity" --type managed-identity
@@ -75,10 +72,8 @@ az login --service-principal ...  # Service principal
 # Batch check from a file
 ./azure-rbac-inventory check --file identities.txt --cloud AzureUSGovernment
 
-# Export to CSV, HTML, or Excel
-./azure-rbac-inventory check <object-id> --export report.csv
-./azure-rbac-inventory check <object-id> --export report.html
-./azure-rbac-inventory check <object-id> --export report.xlsx
+# Use device-code auth for SSH/headless environments
+./azure-rbac-inventory check <object-id> --auth device-code
 ```
 
 ## Usage
@@ -89,7 +84,7 @@ azure-rbac-inventory check <identity> [flags]
 Global Flags:
       --cloud string           Azure cloud name (AzureCloud|AzureUSGovernment|AzureChinaCloud) (default "AzureCloud")
       --tenant string          Tenant ID (uses default from credential if not set)
-      --auth string            Authentication method (default|cli|interactive|device-code|env|managed-identity) (default "default")
+      --auth string            Authentication method (interactive|device-code) (default "interactive")
   -o, --output string          Output format (table|json|csv|markdown) (default "table")
       --subscriptions string   Comma-separated subscription IDs (default: all accessible)
       --include-groups         Include transitive group membership RBAC assignments
@@ -232,8 +227,8 @@ azure-rbac-inventory check <id> --output markdown
 | `--export` | Export to file (format from extension: `.csv`, `.html`, `.md`, `.xlsx`, `.json`) | — |
 | `--per-identity` | Separate output per identity | `false` |
 | `--max-results` | Max search results | `50` |
-| `--concurrency` | Max concurrent checks | `5` |
-| `--auth` | Authentication method (`default\|cli\|interactive\|device-code\|env\|managed-identity`) | `default` |
+| `--concurrency` | Max concurrent checks | `10` |
+| `--auth` | Authentication method (`interactive\|device-code`) | `interactive` |
 | `--output` | Console format: `table\|json\|csv\|markdown` | `table` |
 | `--cloud` | Azure cloud name | `AzureCloud` |
 | `--tenant` | Tenant ID | auto-detected |
@@ -244,37 +239,22 @@ azure-rbac-inventory check <id> --output markdown
 
 ## Authentication
 
-Azure RBAC Inventory uses Azure's `DefaultAzureCredential` by default, which tries these methods in order:
-
-| Priority | Method | How to use |
-|----------|--------|------------|
-| 1 | Environment variables | Set `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` (or `AZURE_CLIENT_CERTIFICATE_PATH`) |
-| 2 | Workload Identity | Automatic in Kubernetes with workload identity configured |
-| 3 | Managed Identity | Automatic on Azure VMs, App Service, etc. |
-| 4 | Azure CLI | Run `az login` first |
-| 5 | Azure Developer CLI | Run `azd auth login` first |
-
-You can override the default chain using the `--auth` flag to select a specific authentication method:
+Azure RBAC Inventory uses **interactive browser authentication** by default. On first run, a browser window opens for sign-in. Tokens are cached locally by the Azure Identity SDK (via MSAL) so subsequent runs authenticate silently.
 
 | `--auth` value | Method | Use case |
 |----------------|--------|----------|
-| `default` | `DefaultAzureCredential` (chain above) | General use — tries all methods in order |
-| `cli` | Azure CLI credential | When already logged in with `az login` |
-| `interactive` | Interactive browser login | Opens a browser for sign-in; tokens are cached locally |
+| `interactive` | Interactive browser login (default) | Opens a browser for sign-in; tokens are cached locally |
 | `device-code` | Device code flow | For environments without a browser (SSH, containers) |
-| `env` | Environment variables only | CI/CD pipelines with `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` |
-| `managed-identity` | Managed Identity only | Azure VMs, App Service, AKS with managed identity |
 
 ```bash
-# Use Azure CLI credentials explicitly
-azure-rbac-inventory check <id> --auth cli
+# Default: interactive browser login
+azure-rbac-inventory check <id>
 
-# Interactive browser login (with token caching)
-azure-rbac-inventory check <id> --auth interactive
-
-# CI/CD with service principal environment variables
-azure-rbac-inventory check <id> --auth env --output json
+# Device code flow for headless environments
+azure-rbac-inventory check <id> --auth device-code
 ```
+
+> **Tip:** For interactive auth, the tool requires delegated permissions — consent to `Directory.Read.All` when prompted. For access package queries, `EntitlementManagement.Read.All` is also needed.
 
 ## Required Permissions
 
@@ -286,7 +266,7 @@ The identity running this tool needs:
 | `Directory.Read.All` | Microsoft Graph | Resolve identities, query directory roles and group memberships | Yes |
 | `EntitlementManagement.Read.All` | Microsoft Graph | Query access package assignments and requests | Optional — tool continues without it |
 
-> **Tip:** For service principal auth, these Graph permissions must be granted as **Application permissions** with admin consent. For interactive/CLI auth, they can be delegated permissions.
+> **Tip:** The tool uses interactive browser authentication by default. Graph permissions are granted as **delegated permissions** — consent to them when prompted during sign-in.
 
 ## Cloud Endpoints
 
@@ -342,13 +322,12 @@ make all
 
 If you see `authentication failed:` errors:
 
-- **`az login` expired** — Re-run `az login`. Azure CLI tokens expire after ~1 hour of inactivity.
-- **Environment variables missing** — When using service principal auth, all three variables must be set: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` (or `AZURE_CLIENT_CERTIFICATE_PATH`). A missing variable causes `DefaultAzureCredential` to skip that method silently and fall through to the next one.
+- **Browser did not open** — On headless systems (SSH, containers), use `--auth device-code` instead.
 - **Wrong tenant** — If you're getting `authorization_request_denied` errors, verify you're authenticating against the correct tenant with `--tenant <tenant-id>`.
 
 ### "Token expired" / "AADSTS700024"
 
-The cached token expired. Re-run `az login` or clear the token cache:
+The cached token expired. Clear the token cache and re-authenticate:
 
 ```bash
 # Linux / macOS
@@ -358,7 +337,7 @@ rm -f ~/.azure/msal_token_cache*
 Remove-Item "$env:USERPROFILE\.azure\msal_token_cache*" -ErrorAction SilentlyContinue
 ```
 
-Then authenticate again with `az login` or your preferred `--auth` method.
+Then run the tool again — a new browser prompt will appear for sign-in.
 
 ### 403 Forbidden on Graph API
 
@@ -485,7 +464,7 @@ azure-rbac-inventory check <id> --subscriptions "sub-id-1,sub-id-2"
 
 - **Read-only** — This tool performs only read operations against Azure ARM and Microsoft Graph APIs. It does not create, modify, or delete any resources.
 - **No secrets stored** — The tool does not store or cache any credentials. Authentication is delegated to the Azure Identity SDK which manages token lifecycle.
-- **Token caching** — When using interactive auth (`--auth interactive`), tokens are cached locally by the Azure Identity SDK (via MSAL) to avoid repeated login prompts. Cache files are stored with restricted permissions.
+- **Token caching** — Tokens are cached locally by the Azure Identity SDK (via MSAL) to avoid repeated login prompts. Cache files are stored with restricted permissions.
 - **Output sensitivity** — Report outputs (JSON, HTML, CSV, XLSX, etc.) contain identity information including object IDs, role assignments, and group memberships. Treat exported files as sensitive and handle according to your organization's data classification policies.
 - **Network** — All API calls use HTTPS. The tool validates pagination URLs to prevent token theft via malicious redirect.
 

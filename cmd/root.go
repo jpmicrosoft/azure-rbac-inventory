@@ -47,7 +47,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&subscriptionsFlag, "subscriptions", "", "Comma-separated subscription IDs (default: all accessible)")
 	rootCmd.PersistentFlags().BoolVar(&includeGroupsFlag, "include-groups", false, "Include transitive group membership RBAC assignments")
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "Verbose output")
-	rootCmd.PersistentFlags().StringVar(&authMethodFlag, "auth", "default", "Authentication method (default|cli|interactive|device-code|env|managed-identity)")
+	rootCmd.PersistentFlags().StringVar(&authMethodFlag, "auth", "interactive", "Authentication method (interactive|device-code)")
 	rootCmd.PersistentFlags().StringVar(&fileFlag, "file", "", "Read identity IDs/patterns from file (one per line)")
 	rootCmd.PersistentFlags().StringVar(&typeFlag, "type", "all", "Identity type filter (all|spn|user|group|managed-identity|app)")
 	rootCmd.PersistentFlags().StringVar(&exportFlag, "export", "", "Export to file (format auto-detected from extension: .csv/.html/.md/.xlsx/.json)")
