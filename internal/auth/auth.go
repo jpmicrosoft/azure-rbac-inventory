@@ -14,7 +14,17 @@ import (
 )
 
 // ValidAuthMethods lists the supported authentication method names.
-var ValidAuthMethods = []string{"interactive", "device-code"}
+var ValidAuthMethods = []string{"interactive", "device-code", "environment", "managed-identity", "azurecli"}
+
+// IsNonInteractive returns true for auth methods that do not require user interaction.
+func IsNonInteractive(method string) bool {
+	switch method {
+	case "environment", "managed-identity", "azurecli":
+		return true
+	default:
+		return false
+	}
+}
 
 // newCache creates a persistent token cache, falling back to an empty cache on error.
 func newCache() azidentity.Cache {
@@ -46,6 +56,26 @@ func GetCredential(env cloudenv.Environment, tenantID string, authMethod string)
 		opts.ClientOptions.Cloud = env.CloudConfig
 		opts.Cache = newCache()
 		return azidentity.NewDeviceCodeCredential(opts)
+
+	case "environment":
+		opts := &azidentity.EnvironmentCredentialOptions{}
+		opts.ClientOptions.Cloud = env.CloudConfig
+		return azidentity.NewEnvironmentCredential(opts)
+
+	case "managed-identity":
+		opts := &azidentity.ManagedIdentityCredentialOptions{}
+		opts.ClientOptions.Cloud = env.CloudConfig
+		if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
+			opts.ID = azidentity.ClientID(clientID)
+		}
+		return azidentity.NewManagedIdentityCredential(opts)
+
+	case "azurecli":
+		opts := &azidentity.AzureCLICredentialOptions{}
+		if tenantID != "" {
+			opts.TenantID = tenantID
+		}
+		return azidentity.NewAzureCLICredential(opts)
 
 	default:
 		return nil, fmt.Errorf("unknown auth method %q — valid values: %v", authMethod, ValidAuthMethods)

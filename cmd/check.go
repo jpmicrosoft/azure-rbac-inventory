@@ -88,9 +88,12 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutFlag)
 	defer cancel()
 
-	// Pre-acquire tokens for both API scopes sequentially to avoid double browser prompts
-	if err := auth.PreAuthenticate(ctx, cred, env); err != nil {
-		return fmt.Errorf("pre-authentication failed: %w", err)
+	// Pre-acquire tokens for both API scopes sequentially to avoid double browser prompts.
+	// Skip for non-interactive methods where browser prompts don't apply.
+	if !auth.IsNonInteractive(authMethodFlag) {
+		if err := auth.PreAuthenticate(ctx, cred, env); err != nil {
+			return fmt.Errorf("pre-authentication failed: %w", err)
+		}
 	}
 
 	// Resolve all inputs to concrete identity IDs (expand patterns)

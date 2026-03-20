@@ -239,7 +239,7 @@ azure-rbac-inventory check <id> --output markdown
 | `--max-results` | Max search results | `50` | — |
 | `--concurrency` | Max concurrent checks | `10` | — |
 | `--timeout` | Global execution timeout | `30m` | — |
-| `--auth` | Authentication method (`interactive\|device-code`) | `interactive` | `AZURE_RBAC_AUTH` |
+| `--auth` | Authentication method (`interactive\|device-code\|environment\|managed-identity\|azurecli`) | `interactive` | `AZURE_RBAC_AUTH` |
 | `--output` | Console format: `table\|json\|csv\|markdown` | `table` | — |
 | `--cloud` | Azure cloud name | `AzureCloud` | `AZURE_RBAC_CLOUD` |
 | `--tenant` | Tenant ID | auto-detected | `AZURE_TENANT_ID` |
@@ -259,6 +259,9 @@ Azure RBAC Inventory uses **interactive browser authentication** by default. On 
 |----------------|--------|----------|
 | `interactive` | Interactive browser login (default) | Opens a browser for sign-in; tokens are cached locally |
 | `device-code` | Device code flow | For environments without a browser (SSH, containers) |
+| `environment` | Service principal (env vars) | CI/CD pipelines — uses `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` |
+| `managed-identity` | Azure Managed Identity | Azure-hosted runners (Azure DevOps agents, AKS, Azure VMs) |
+| `azurecli` | Azure CLI credential | Pipelines with `az login` (GitHub Actions `azure/login`, Azure DevOps service connections) |
 
 ```bash
 # Default: interactive browser login
@@ -266,9 +269,70 @@ azure-rbac-inventory check <id>
 
 # Device code flow for headless environments
 azure-rbac-inventory check <id> --auth device-code
+
+# CI/CD: service principal via environment variables
+export AZURE_CLIENT_ID="<app-id>"
+export AZURE_CLIENT_SECRET="<secret>"
+export AZURE_TENANT_ID="<tenant-id>"
+azure-rbac-inventory check <id> --auth environment --output json
+
+# CI/CD: managed identity (Azure-hosted runners)
+azure-rbac-inventory check <id> --auth managed-identity --output json
+
+# CI/CD: after az login
+az login --service-principal -u <app-id> -p <secret> --tenant <tenant-id>
+azure-rbac-inventory check <id> --auth azurecli --output json
 ```
 
-> **Tip:** For interactive auth, the tool requires delegated permissions — consent to `Directory.Read.All` when prompted. For access package queries (`--include-access-packages`), `EntitlementManagement.Read.All` is also needed.
+> **Tip:** For interactive auth, the tool requires delegated permissions — consent to `Directory.Read.All` when prompted. For CI/CD auth methods (`environment`, `managed-identity`, `azurecli`), use **application permissions** granted via app registration in Entra ID. For access package queries (`--include-access-packages`), `EntitlementManagement.Read.All` is also needed.
+
+### CI/CD Pipeline Examples
+
+#### GitHub Actions
+
+```yaml
+- name: Azure Login
+  uses: azure/login@v2
+  with:
+    creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+- name: RBAC Audit
+  run: |
+    azure-rbac-inventory check <id> \
+      --auth azurecli \
+      --output json \
+      --export rbac-report.json
+```
+
+Or with service principal environment variables:
+
+```yaml
+- name: RBAC Audit
+  env:
+    AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+    AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+    AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  run: |
+    azure-rbac-inventory check <id> \
+      --auth environment \
+      --output json \
+      --export rbac-report.json
+```
+
+#### Azure DevOps
+
+```yaml
+- task: AzureCLI@2
+  inputs:
+    azureSubscription: 'my-service-connection'
+    scriptType: bash
+    scriptLocation: inlineScript
+    inlineScript: |
+      azure-rbac-inventory check <id> \
+        --auth azurecli \
+        --output json \
+        --export $(Build.ArtifactStagingDirectory)/rbac-report.json
+```
 
 ## Required Permissions
 
@@ -451,9 +515,17 @@ Yes. Use `--export report.html` for a polished HTML report, or `--export report.
 Direct means the role is assigned directly to the identity. Inherited means it came through a group membership (shown when using `--include-group-rbac`).
 
 **Q: Does the tool work in CI/CD pipelines?**
-Use `--auth device-code` for non-interactive environments where a browser is not available. For fully automated CI/CD pipelines, environment variable-based authentication is planned for a future release. Use `--output json` for machine-readable output:
+Yes. Three non-interactive authentication methods are available:
+
+| Method | Flag | When to use |
+|---|---|---|
+| Service principal | `--auth environment` | Set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` as env vars |
+| Managed identity | `--auth managed-identity` | Azure-hosted compute (VMs, AKS, Azure DevOps agents) |
+| Azure CLI | `--auth azurecli` | After `az login` or `azure/login@v2` GitHub Action |
+
+Use `--output json` for machine-readable output:
 ```bash
-azure-rbac-inventory check <id> --auth device-code --output json --export report.json
+azure-rbac-inventory check <id> --auth environment --output json --export report.json
 ```
 
 **Q: What happens if I don't have permissions to all subscriptions?**

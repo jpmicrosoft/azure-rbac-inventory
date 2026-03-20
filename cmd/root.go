@@ -51,7 +51,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&includeGroupRBACFlag, "include-group-rbac", false, "Also query RBAC role assignments inherited through group memberships (group list always shown)")
 	rootCmd.PersistentFlags().BoolVar(&includeAccessPackagesFlag, "include-access-packages", false, "Query access package assignments and requests (requires EntitlementManagement.Read.All)")
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "Verbose output")
-	rootCmd.PersistentFlags().StringVar(&authMethodFlag, "auth", envOrDefault("AZURE_RBAC_AUTH", "interactive"), "Authentication method (interactive|device-code)")
+	rootCmd.PersistentFlags().StringVar(&authMethodFlag, "auth", envOrDefault("AZURE_RBAC_AUTH", "interactive"), "Authentication method (interactive|device-code|environment|managed-identity|azurecli)")
 	rootCmd.PersistentFlags().StringVar(&fileFlag, "file", "", "Read identity IDs/patterns from file (one per line)")
 	rootCmd.PersistentFlags().StringVar(&typeFlag, "type", "all", "Identity type filter (all|spn|user|group|managed-identity|app)")
 	rootCmd.PersistentFlags().StringVar(&exportFlag, "export", "", "Export to file (format auto-detected from extension: .csv/.html/.md/.xlsx/.json)")
