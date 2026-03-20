@@ -13,6 +13,9 @@ import (
 // maxInputEntries is the maximum number of entries allowed in an input file.
 const maxInputEntries = 10000
 
+// maxInputFileBytes is the maximum file size allowed for input files (10 MB).
+const maxInputFileBytes = 10 * 1024 * 1024
+
 // InputEntry represents a single identity input with optional metadata.
 type InputEntry struct {
 	ID    string `json:"id"`    // Required: UUID, app ID, display name, or wildcard pattern
@@ -46,6 +49,14 @@ func ValidateInputType(t string) error {
 //   - .json → JSON with {"identities": [...]} structure
 //   - anything else → plain text, one ID per line
 func ParseInputFile(path string) ([]InputEntry, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot stat file %q: %w", path, err)
+	}
+	if info.Size() > maxInputFileBytes {
+		return nil, fmt.Errorf("file %q is %d bytes, exceeding maximum of %d (10 MB)", path, info.Size(), maxInputFileBytes)
+	}
+
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".csv":

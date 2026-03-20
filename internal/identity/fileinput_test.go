@@ -82,8 +82,8 @@ func TestParseInputFile_NonexistentFile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent file, got nil")
 	}
-	if !strings.Contains(err.Error(), "cannot open file") {
-		t.Errorf("expected error containing %q, got: %v", "cannot open file", err)
+	if !strings.Contains(err.Error(), "cannot stat file") {
+		t.Errorf("expected error containing %q, got: %v", "cannot stat file", err)
 	}
 }
 

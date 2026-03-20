@@ -53,8 +53,8 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	if maxResultsFlag <= 0 {
 		return fmt.Errorf("--max-results must be a positive integer, got %d", maxResultsFlag)
 	}
-	if concurrencyFlag > 50 {
-		return fmt.Errorf("--concurrency must be at most 50, got %d", concurrencyFlag)
+	if concurrencyFlag <= 0 || concurrencyFlag > 50 {
+		return fmt.Errorf("--concurrency must be between 1 and 50, got %d", concurrencyFlag)
 	}
 
 	// Collect input identities from positional arg or --file
@@ -85,7 +85,8 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintln(os.Stderr, "OK")
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutFlag)
+	defer cancel()
 
 	// Pre-acquire tokens for both API scopes sequentially to avoid double browser prompts
 	if err := auth.PreAuthenticate(ctx, cred, env); err != nil {
@@ -135,6 +136,11 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	if len(resolvedIDs) == 0 {
 		return fmt.Errorf("no identities to process")
+	}
+	const maxResolvedIdentities = 1000
+	if len(resolvedIDs) > maxResolvedIdentities {
+		return fmt.Errorf("pattern search resolved %d identities, exceeding maximum of %d; narrow your search patterns or reduce --max-results",
+			len(resolvedIDs), maxResolvedIdentities)
 	}
 	fmt.Fprintf(os.Stderr, "\nProcessing %d identities...\n", len(resolvedIDs))
 

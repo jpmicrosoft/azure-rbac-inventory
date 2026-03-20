@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -17,12 +18,13 @@ var (
 	includeAccessPackagesFlag bool
 	verboseFlag               bool
 	authMethodFlag            string
-	fileFlag                  string // --file: path to file with identity IDs/patterns
-	typeFlag                  string // --type: identity type filter
-	exportFlag                string // --export: export file path (format from extension)
-	perIdentityFlag           bool   // --per-identity: separate output per identity
-	maxResultsFlag            int    // --max-results: max identities from pattern search
-	concurrencyFlag           int    // --concurrency: max concurrent identity checks
+	fileFlag                  string        // --file: path to file with identity IDs/patterns
+	typeFlag                  string        // --type: identity type filter
+	exportFlag                string        // --export: export file path (format from extension)
+	perIdentityFlag           bool          // --per-identity: separate output per identity
+	maxResultsFlag            int           // --max-results: max identities from pattern search
+	concurrencyFlag           int           // --concurrency: max concurrent identity checks
+	timeoutFlag               time.Duration // --timeout: global execution timeout
 )
 
 var rootCmd = &cobra.Command{
@@ -56,6 +58,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&perIdentityFlag, "per-identity", false, "Separate output/file per identity when processing multiple")
 	rootCmd.PersistentFlags().IntVar(&maxResultsFlag, "max-results", 50, "Max identities to return from pattern search")
 	rootCmd.PersistentFlags().IntVar(&concurrencyFlag, "concurrency", 10, "Max concurrent identity checks for batch processing")
+	rootCmd.PersistentFlags().DurationVar(&timeoutFlag, "timeout", 30*time.Minute, "Global execution timeout (e.g. 10m, 1h)")
 }
 
 // SetVersion sets the version string for the CLI.

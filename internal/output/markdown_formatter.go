@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/jpmicrosoft/azure-rbac-inventory/internal/report"
 )
@@ -145,21 +146,28 @@ func writeMarkdownReport(buf *bytes.Buffer, rpt *report.Report) {
 	if len(rpt.Warnings) > 0 {
 		fmt.Fprintf(buf, "### Warnings (%d)\n\n", len(rpt.Warnings))
 		for _, w := range rpt.Warnings {
-			fmt.Fprintf(buf, "- ⚠️ %s\n", w)
+			fmt.Fprintf(buf, "- ⚠️ %s\n", escapeMarkdown(w))
 		}
 		buf.WriteString("\n")
 	}
 }
 
-// escapeMarkdown escapes pipe characters in Markdown table cells.
+// markdownReplacer escapes all Markdown-significant characters in table cells.
+var markdownReplacer = strings.NewReplacer(
+	`|`, `\|`,
+	`[`, `\[`,
+	`]`, `\]`,
+	`(`, `\(`,
+	`)`, `\)`,
+	`*`, `\*`,
+	`_`, `\_`,
+	"`", "\\`",
+	`#`, `\#`,
+	`>`, `\>`,
+	`!`, `\!`,
+)
+
+// escapeMarkdown escapes Markdown metacharacters in table cells and inline text.
 func escapeMarkdown(s string) string {
-	var buf bytes.Buffer
-	for _, r := range s {
-		if r == '|' {
-			buf.WriteString("\\|")
-		} else {
-			buf.WriteRune(r)
-		}
-	}
-	return buf.String()
+	return markdownReplacer.Replace(s)
 }
