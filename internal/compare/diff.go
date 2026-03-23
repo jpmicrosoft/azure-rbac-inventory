@@ -72,13 +72,15 @@ type ModelTargetResult struct {
 	ExtraRoles    int
 	MissingGroups int
 	ExtraGroups   int
+	WorkloadName  string `json:"workloadName,omitempty"`
 }
 
 // ModelComparisonResult holds the full 1:N model comparison.
 type ModelComparisonResult struct {
-	Model   *identity.Identity
-	Cloud   string
-	Results []ModelTargetResult
+	Model          *identity.Identity
+	Cloud          string
+	GoldenWorkload string `json:"goldenWorkload,omitempty"`
+	Results        []ModelTargetResult
 }
 
 // rbacKey returns the comparison key for an RBAC assignment.
@@ -301,6 +303,201 @@ func diffPackages(aList, bList []graph.AccessPackageAssignment) PackageDiff {
 		}
 	}
 	return diff
+}
+
+// subNameValues extracts the values from a map into a string slice.
+func subNameValues(m map[string]string) []string {
+	vals := make([]string, 0, len(m))
+	for _, v := range m {
+		vals = append(vals, v)
+	}
+	return vals
+}
+
+// diffRBACWorkload compares RBAC assignments using custom key functions for
+// each side, enabling workload-normalized comparisons.
+func diffRBACWorkload(aList, bList []rbac.RoleAssignment, keyFnA, keyFnB func(rbac.RoleAssignment) string) RBACDiff {
+	type entry struct {
+		items []rbac.RoleAssignment
+		count int
+	}
+
+	aKeys := make(map[string]*entry)
+	for _, item := range aList {
+		k := keyFnA(item)
+		if e, ok := aKeys[k]; ok {
+			e.items = append(e.items, item)
+			e.count++
+		} else {
+			aKeys[k] = &entry{items: []rbac.RoleAssignment{item}, count: 1}
+		}
+	}
+
+	bKeys := make(map[string]*entry)
+	for _, item := range bList {
+		k := keyFnB(item)
+		if e, ok := bKeys[k]; ok {
+			e.items = append(e.items, item)
+			e.count++
+		} else {
+			bKeys[k] = &entry{items: []rbac.RoleAssignment{item}, count: 1}
+		}
+	}
+
+	var diff RBACDiff
+
+	for k, ae := range aKeys {
+		if be, ok := bKeys[k]; ok {
+			shared := ae.count
+			if be.count < shared {
+				shared = be.count
+			}
+			for i := 0; i < shared; i++ {
+				diff.Shared = append(diff.Shared, ae.items[i])
+			}
+			for i := shared; i < ae.count; i++ {
+				diff.OnlyA = append(diff.OnlyA, ae.items[i])
+			}
+		} else {
+			diff.OnlyA = append(diff.OnlyA, ae.items...)
+		}
+	}
+
+	for k, be := range bKeys {
+		if ae, ok := aKeys[k]; ok {
+			shared := ae.count
+			if be.count < shared {
+				shared = be.count
+			}
+			for i := shared; i < be.count; i++ {
+				diff.OnlyB = append(diff.OnlyB, be.items[i])
+			}
+		} else {
+			diff.OnlyB = append(diff.OnlyB, be.items...)
+		}
+	}
+
+	return diff
+}
+
+// WorkloadModelCompare compares a model report against targets using
+// workload-normalized scopes. Identities in different workloads that share the
+// same structural RBAC pattern are recognized as matches.
+//
+// goldenWorkload is the explicit workload name for the model SPN (e.g. from a
+// --workload-key flag). If empty, it is auto-detected via ExtractWorkloadName.
+// If detection also fails, the function falls back to the literal ModelCompare.
+func WorkloadModelCompare(model *reportpkg.Report, targets []*reportpkg.Report, goldenWorkload string) *ModelComparisonResult {
+	if goldenWorkload == "" {
+		goldenWorkload = ExtractWorkloadName(
+			model.Identity.DisplayName,
+			subNameValues(model.SubscriptionNames),
+		)
+	}
+	if goldenWorkload == "" {
+		return ModelCompare(model, targets)
+	}
+
+	goldenKeyFn := func(a rbac.RoleAssignment) string {
+		ns := NormalizeScope(a.Scope, goldenWorkload, model.SubscriptionNames)
+		return WorkloadScopeKey(a.RoleName, ns)
+	}
+
+	mcr := &ModelComparisonResult{
+		Model:          model.Identity,
+		Cloud:          model.Cloud,
+		GoldenWorkload: goldenWorkload,
+		Results:        make([]ModelTargetResult, 0, len(targets)),
+	}
+
+	for _, target := range targets {
+		targetWorkload := ExtractWorkloadName(
+			target.Identity.DisplayName,
+			subNameValues(target.SubscriptionNames),
+		)
+
+		var extraWarnings []string
+		if targetWorkload == "" {
+			extraWarnings = append(extraWarnings,
+				"could not detect workload name for target; RBAC comparison uses raw scopes")
+		}
+
+		targetKeyFn := func(a rbac.RoleAssignment) string {
+			ns := NormalizeScope(a.Scope, targetWorkload, target.SubscriptionNames)
+			return WorkloadScopeKey(a.RoleName, ns)
+		}
+
+		// Workload-normalized RBAC diff.
+		rbacDiff := diffRBACWorkload(
+			model.RBACAssignments, target.RBACAssignments,
+			goldenKeyFn, targetKeyFn,
+		)
+
+		// Non-scope-aware diffs (same logic as CompareReports).
+		roleDiff := diffRoles(model.DirectoryRoles, target.DirectoryRoles)
+		groupDiff := diffGroups(model.GroupMemberships, target.GroupMemberships)
+		pkgDiff := diffPackages(model.AccessPackages, target.AccessPackages)
+
+		// Build target warnings without mutating the original slice.
+		var warningsB []string
+		if len(target.Warnings) > 0 || len(extraWarnings) > 0 {
+			warningsB = make([]string, 0, len(target.Warnings)+len(extraWarnings))
+			warningsB = append(warningsB, target.Warnings...)
+			warningsB = append(warningsB, extraWarnings...)
+		}
+
+		// Compute match percentage.
+		sharedTotal := len(rbacDiff.Shared) + len(roleDiff.Shared) +
+			len(groupDiff.Shared) + len(pkgDiff.Shared)
+
+		totalA := len(model.RBACAssignments) + len(model.DirectoryRoles) +
+			len(model.GroupMemberships) + len(model.AccessPackages)
+		totalB := len(target.RBACAssignments) + len(target.DirectoryRoles) +
+			len(target.GroupMemberships) + len(target.AccessPackages)
+
+		maxTotal := totalA
+		if totalB > maxTotal {
+			maxTotal = totalB
+		}
+
+		matchPct := 100.0
+		if maxTotal > 0 {
+			matchPct = float64(sharedTotal) / float64(maxTotal) * 100.0
+		}
+
+		comp := &ComparisonResult{
+			IdentityA:      model.Identity,
+			IdentityB:      target.Identity,
+			Cloud:          model.Cloud,
+			RBAC:           rbacDiff,
+			DirectoryRoles: roleDiff,
+			Groups:         groupDiff,
+			AccessPackages: pkgDiff,
+			WarningsA:      model.Warnings,
+			WarningsB:      warningsB,
+			MatchPercent:   matchPct,
+		}
+
+		mtr := ModelTargetResult{
+			Target:        target.Identity,
+			Comparison:    comp,
+			MatchPercent:  matchPct,
+			MissingRBAC:   len(rbacDiff.OnlyA),
+			ExtraRBAC:     len(rbacDiff.OnlyB),
+			MissingRoles:  len(roleDiff.OnlyA),
+			ExtraRoles:    len(roleDiff.OnlyB),
+			MissingGroups: len(groupDiff.OnlyA),
+			ExtraGroups:   len(groupDiff.OnlyB),
+			WorkloadName:  targetWorkload,
+		}
+		mcr.Results = append(mcr.Results, mtr)
+	}
+
+	sort.Slice(mcr.Results, func(i, j int) bool {
+		return mcr.Results[i].MatchPercent > mcr.Results[j].MatchPercent
+	})
+
+	return mcr
 }
 
 // ModelCompare compares a model report against multiple target reports.

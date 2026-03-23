@@ -196,6 +196,47 @@ match% = shared items / max(total_A, total_B) × 100
 
 RBAC assignments are compared by **RoleName + ScopeType** (e.g., `Contributor @ Subscription`). Specific scope IDs (subscription GUIDs, resource group names) are ignored during comparison because identities in different environments typically operate on different subscriptions. This means two identities both having `Contributor` at the subscription level are considered a match, even if the subscription IDs differ.
 
+### Workload-Aware Comparison
+
+When SPNs follow a naming convention that embeds a workload identifier (e.g., `spn-fedrampmod-wkld-axonius`), the tool can perform **cross-workload** scope comparison. Instead of comparing raw scope IDs, scopes are normalized by replacing the workload token with `{workload}`, so assignments on different but structurally equivalent subscriptions are matched correctly.
+
+**How it works:**
+
+1. **Primary detection** — The tool looks for a `wkld-{name}` segment in the SPN display name and validates the extracted name against the SPN's subscription display names.
+2. **Fallback** — If `wkld-` is not present, the tool finds the longest common segment between the SPN name and its subscription names.
+3. **Override** — Use `--workload-key` to explicitly set the workload name for the golden SPN.
+4. **Normalization** — Scopes containing the workload token are normalized to `{workload}`, enabling cross-workload comparison. Scopes without the workload token (shared/common subscriptions) are compared exactly.
+
+**How scope normalization works:**
+
+```
+Golden: spn-fedrampmod-wkld-axonius → workload = "axonius"
+  Reader on azg-sub-axonius-hub-01     → Reader|azg-sub-{workload}-hub-01
+  Contributor on azg-sub-axonius-spoke-01 → Contributor|azg-sub-{workload}-spoke-01
+
+Target: spn-fedrampmod-wkld-zscaler → workload = "zscaler"
+  Reader on azg-sub-zscaler-hub-01     → Reader|azg-sub-{workload}-hub-01  ✓ MATCH
+  Contributor on azg-sub-zscaler-spoke-01 → Contributor|azg-sub-{workload}-spoke-01  ✓ MATCH
+```
+
+**Examples:**
+
+```bash
+# Auto-detect workload names from SPN naming conventions
+azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius \
+  spn-fedrampmod-wkld-zscaler spn-fedrampmod-wkld-adh \
+  --cloud AzureUSGovernment
+
+# Explicit workload key for the golden SPN
+azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius \
+  --workload-key axonius \
+  --file targets.csv --cloud AzureUSGovernment
+
+# Export workload comparison to HTML
+azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius \
+  spn-fedrampmod-wkld-zscaler --export workload-diff.html
+```
+
 ### Compare Flags
 
 | Flag | Description | Default |
@@ -203,6 +244,7 @@ RBAC assignments are compared by **RoleName + ScopeType** (e.g., `Contributor @ 
 | `--model` | Baseline identity for 1:N model compare | — |
 | `--file` | Load target identities from file (CSV, JSON, or text) | — |
 | `--export` | Export comparison to file (`.html` or `.json`) | — |
+| `--workload-key` | Explicit workload name for the golden SPN | Auto-detected |
 
 All global flags (`--cloud`, `--tenant`, `--auth`, `--subscriptions`, `--timeout`, `--verbose`, etc.) also apply to `compare`.
 
@@ -671,6 +713,12 @@ Identities in different environments (dev vs. prod) typically operate on differe
 
 **Q: Can I compare identities across clouds?**
 No. Both identities must be in the same tenant and cloud. The comparison queries run against a single set of ARM/Graph endpoints.
+
+**Q: What naming conventions does workload-aware comparison require?**
+SPNs and subscriptions must share a common workload identifier. The tool tries to extract it from the `wkld-{name}` pattern in SPN names and validates it against subscription display names. If your naming doesn't follow a discernible pattern, use `--workload-key` to specify it explicitly. If no workload is detected, the tool falls back to scope-type-only comparison.
+
+**Q: What happens if a target SPN's workload name can't be detected?**
+The tool warns and falls back to non-workload comparison for that specific target. Other targets with detectable workload names continue using workload-aware comparison.
 
 ## Notes & Limitations
 

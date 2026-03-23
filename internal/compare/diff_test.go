@@ -635,3 +635,308 @@ func floatClose(a, b float64) bool {
 	}
 	return diff < epsilon
 }
+
+// ---------------------------------------------------------------------------
+// WorkloadModelCompare tests
+// ---------------------------------------------------------------------------
+
+func makeWorkloadReport(spnName string, subNames map[string]string, assignments []rbac.RoleAssignment) *reportpkg.Report {
+	return &reportpkg.Report{
+		Identity: &identity.Identity{
+			DisplayName: spnName,
+			ObjectID:    "test-oid-" + spnName,
+			Type:        identity.TypeServicePrincipal,
+		},
+		Cloud:             "AzureUSGovernment",
+		SubscriptionNames: subNames,
+		RBACAssignments:   assignments,
+	}
+}
+
+func TestWorkloadModelCompare_BasicMatch(t *testing.T) {
+	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+		map[string]string{
+			"aaa-1111": "azg-sub-axonius-hub-01",
+			"aaa-2222": "azg-sub-axonius-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/aaa-2222", ScopeType: "Subscription"},
+		},
+	)
+
+	target := makeWorkloadReport("spn-fedrampmod-wkld-zscaler",
+		map[string]string{
+			"bbb-1111": "azg-sub-zscaler-hub-01",
+			"bbb-2222": "azg-sub-zscaler-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/bbb-2222", ScopeType: "Subscription"},
+		},
+	)
+
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "")
+
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
+	}
+	r := result.Results[0]
+	if !floatClose(r.MatchPercent, 100.0) {
+		t.Errorf("expected MatchPercent≈100, got %.2f", r.MatchPercent)
+	}
+	if r.MissingRBAC != 0 {
+		t.Errorf("expected MissingRBAC=0, got %d", r.MissingRBAC)
+	}
+	if r.ExtraRBAC != 0 {
+		t.Errorf("expected ExtraRBAC=0, got %d", r.ExtraRBAC)
+	}
+}
+
+func TestWorkloadModelCompare_Drift(t *testing.T) {
+	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+		map[string]string{
+			"aaa-1111": "azg-sub-axonius-hub-01",
+			"aaa-2222": "azg-sub-axonius-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/aaa-2222", ScopeType: "Subscription"},
+			{RoleName: "Key Vault Admin", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+		},
+	)
+
+	target := makeWorkloadReport("spn-fedrampmod-wkld-adh",
+		map[string]string{
+			"bbb-1111": "azg-sub-adh-prod-01",
+			"bbb-2222": "azg-sub-adh-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/bbb-2222", ScopeType: "Subscription"},
+		},
+	)
+
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "")
+
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
+	}
+	r := result.Results[0]
+
+	// Normalized keys — golden: Reader|hub, Contributor|spoke, Key Vault Admin|hub
+	// target: Reader|prod, Contributor|spoke
+	// Shared: Contributor|spoke (1), Missing: Reader|hub + KV Admin|hub (2), Extra: Reader|prod (1)
+	if r.MissingRBAC != 2 {
+		t.Errorf("expected MissingRBAC=2, got %d", r.MissingRBAC)
+	}
+	if r.ExtraRBAC != 1 {
+		t.Errorf("expected ExtraRBAC=1, got %d", r.ExtraRBAC)
+	}
+
+	// shared=1, max(golden=3, target=2)=3 → 1/3 ≈ 33.33%
+	wantPct := float64(1) / float64(3) * 100.0
+	if !floatClose(r.MatchPercent, wantPct) {
+		t.Errorf("expected MatchPercent≈%.2f, got %.2f", wantPct, r.MatchPercent)
+	}
+}
+
+func TestWorkloadModelCompare_ExplicitWorkloadKey(t *testing.T) {
+	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+		map[string]string{
+			"aaa-1111": "azg-sub-axonius-hub-01",
+			"aaa-2222": "azg-sub-axonius-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/aaa-2222", ScopeType: "Subscription"},
+		},
+	)
+
+	target := makeWorkloadReport("spn-fedrampmod-wkld-zscaler",
+		map[string]string{
+			"bbb-1111": "azg-sub-zscaler-hub-01",
+			"bbb-2222": "azg-sub-zscaler-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/bbb-2222", ScopeType: "Subscription"},
+		},
+	)
+
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "axonius")
+
+	// Explicit workload key should be stored in result.
+	if result.GoldenWorkload != "axonius" {
+		t.Errorf("expected GoldenWorkload=%q, got %q", "axonius", result.GoldenWorkload)
+	}
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
+	}
+	if !floatClose(result.Results[0].MatchPercent, 100.0) {
+		t.Errorf("expected MatchPercent≈100, got %.2f", result.Results[0].MatchPercent)
+	}
+}
+
+func TestWorkloadModelCompare_FallbackNoWorkload(t *testing.T) {
+	golden := makeWorkloadReport("generic-service-principal",
+		map[string]string{
+			"aaa-1111": "azg-sub-platform-hub-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+		},
+	)
+
+	target := makeWorkloadReport("another-service-principal",
+		map[string]string{
+			"bbb-1111": "azg-sub-platform-hub-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
+		},
+	)
+
+	// No discernible workload name — should fall back gracefully.
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "")
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
+	}
+	// Sanity: MatchPercent is in [0, 100].
+	pct := result.Results[0].MatchPercent
+	if pct < 0.0 || pct > 100.0 {
+		t.Errorf("MatchPercent out of range: %.2f", pct)
+	}
+}
+
+func TestWorkloadModelCompare_MultipleTargets(t *testing.T) {
+	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+		map[string]string{
+			"aaa-1111": "azg-sub-axonius-hub-01",
+			"aaa-2222": "azg-sub-axonius-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/aaa-2222", ScopeType: "Subscription"},
+			{RoleName: "Key Vault Admin", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+		},
+	)
+
+	// Target 1: 100% match (same structure, different workload name).
+	t1 := makeWorkloadReport("spn-fedrampmod-wkld-zscaler",
+		map[string]string{
+			"bbb-1111": "azg-sub-zscaler-hub-01",
+			"bbb-2222": "azg-sub-zscaler-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/bbb-2222", ScopeType: "Subscription"},
+			{RoleName: "Key Vault Admin", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
+		},
+	)
+
+	// Target 2: partial match (hub vs prod suffix drift).
+	t2 := makeWorkloadReport("spn-fedrampmod-wkld-adh",
+		map[string]string{
+			"ccc-1111": "azg-sub-adh-prod-01",
+			"ccc-2222": "azg-sub-adh-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/ccc-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/ccc-2222", ScopeType: "Subscription"},
+		},
+	)
+
+	// Target 3: 0 matching RBAC (completely different roles).
+	t3 := makeWorkloadReport("spn-fedrampmod-wkld-crowdstrike",
+		map[string]string{
+			"ddd-1111": "azg-sub-crowdstrike-hub-01",
+			"ddd-2222": "azg-sub-crowdstrike-spoke-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Owner", Scope: "/subscriptions/ddd-1111", ScopeType: "Subscription"},
+			{RoleName: "Network Contributor", Scope: "/subscriptions/ddd-2222", ScopeType: "Subscription"},
+		},
+	)
+
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{t1, t2, t3}, "")
+
+	if len(result.Results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(result.Results))
+	}
+
+	// Results must be sorted by MatchPercent descending.
+	if result.Results[0].Target.DisplayName != "spn-fedrampmod-wkld-zscaler" {
+		t.Errorf("expected first=zscaler, got %s", result.Results[0].Target.DisplayName)
+	}
+	if result.Results[1].Target.DisplayName != "spn-fedrampmod-wkld-adh" {
+		t.Errorf("expected second=adh, got %s", result.Results[1].Target.DisplayName)
+	}
+	if result.Results[2].Target.DisplayName != "spn-fedrampmod-wkld-crowdstrike" {
+		t.Errorf("expected third=crowdstrike, got %s", result.Results[2].Target.DisplayName)
+	}
+
+	if !floatClose(result.Results[0].MatchPercent, 100.0) {
+		t.Errorf("expected zscaler MatchPercent≈100, got %.2f", result.Results[0].MatchPercent)
+	}
+
+	// adh: shared=1 (Contributor|spoke), max(3,2)=3 → 33.33%
+	wantPartialPct := float64(1) / float64(3) * 100.0
+	if !floatClose(result.Results[1].MatchPercent, wantPartialPct) {
+		t.Errorf("expected adh MatchPercent≈%.2f, got %.2f", wantPartialPct, result.Results[1].MatchPercent)
+	}
+
+	if !floatClose(result.Results[2].MatchPercent, 0.0) {
+		t.Errorf("expected crowdstrike MatchPercent≈0, got %.2f", result.Results[2].MatchPercent)
+	}
+}
+
+func TestWorkloadModelCompare_CommonScopes(t *testing.T) {
+	commonSubID := "ccc-3333"
+	commonSubName := "azg-sub-shared-services-01"
+
+	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+		map[string]string{
+			"aaa-1111":  "azg-sub-axonius-hub-01",
+			commonSubID: commonSubName,
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+			{RoleName: "Reader", Scope: "/subscriptions/" + commonSubID, ScopeType: "Subscription"},
+		},
+	)
+
+	target := makeWorkloadReport("spn-fedrampmod-wkld-zscaler",
+		map[string]string{
+			"bbb-1111":  "azg-sub-zscaler-hub-01",
+			commonSubID: commonSubName,
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
+			{RoleName: "Reader", Scope: "/subscriptions/" + commonSubID, ScopeType: "Subscription"},
+		},
+	)
+
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "")
+
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
+	}
+	r := result.Results[0]
+
+	// Workload-specific sub normalizes: Reader|azg-sub-{workload}-hub-01 → match.
+	// Common sub has no workload name: Reader|azg-sub-shared-services-01 → exact match.
+	if !floatClose(r.MatchPercent, 100.0) {
+		t.Errorf("expected MatchPercent≈100, got %.2f", r.MatchPercent)
+	}
+	if r.MissingRBAC != 0 {
+		t.Errorf("expected MissingRBAC=0, got %d", r.MissingRBAC)
+	}
+	if r.ExtraRBAC != 0 {
+		t.Errorf("expected ExtraRBAC=0, got %d", r.ExtraRBAC)
+	}
+}

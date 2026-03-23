@@ -15,6 +15,12 @@ import (
 	cloudenv "github.com/jpmicrosoft/azure-rbac-inventory/internal/cloud"
 )
 
+// SubscriptionInfo holds a subscription's GUID and display name.
+type SubscriptionInfo struct {
+	ID   string
+	Name string
+}
+
 // RoleAssignment represents a resolved RBAC role assignment.
 type RoleAssignment struct {
 	RoleName       string `json:"roleName"`
@@ -77,10 +83,10 @@ func (c *Checker) GetAssignments(ctx context.Context, principalID string, subscr
 
 	for _, sub := range subs {
 		g.Go(func() error {
-			assignments, err := c.getAssignmentsForSubscription(gctx, sub, principalID)
+			assignments, err := c.getAssignmentsForSubscription(gctx, sub.ID, principalID)
 			if err != nil {
 				mu.Lock()
-				warnings = append(warnings, fmt.Sprintf("subscription %s: %v", sub, err))
+				warnings = append(warnings, fmt.Sprintf("subscription %s: %v", sub.ID, err))
 				mu.Unlock()
 				return nil
 			}
@@ -101,9 +107,13 @@ func (c *Checker) GetAssignments(ctx context.Context, principalID string, subscr
 	return allAssignments, warnings, nil
 }
 
-func (c *Checker) listSubscriptions(ctx context.Context, filter []string) ([]string, error) {
+func (c *Checker) listSubscriptions(ctx context.Context, filter []string) ([]SubscriptionInfo, error) {
 	if len(filter) > 0 {
-		return filter, nil
+		infos := make([]SubscriptionInfo, len(filter))
+		for i, id := range filter {
+			infos[i] = SubscriptionInfo{ID: id, Name: id}
+		}
+		return infos, nil
 	}
 
 	opts := &arm.ClientOptions{}
@@ -114,7 +124,7 @@ func (c *Checker) listSubscriptions(ctx context.Context, filter []string) ([]str
 		return nil, fmt.Errorf("failed to create subscriptions client: %w", err)
 	}
 
-	var subs []string
+	var subs []SubscriptionInfo
 	pager := client.NewListPager(nil)
 	for pager.More() {
 		page, err := pager.NextPage(ctx)
@@ -123,12 +133,33 @@ func (c *Checker) listSubscriptions(ctx context.Context, filter []string) ([]str
 		}
 		for _, sub := range page.Value {
 			if sub.SubscriptionID != nil {
-				subs = append(subs, *sub.SubscriptionID)
+				name := safeDeref(sub.DisplayName)
+				if name == "" {
+					name = *sub.SubscriptionID
+				}
+				subs = append(subs, SubscriptionInfo{
+					ID:   *sub.SubscriptionID,
+					Name: name,
+				})
 			}
 		}
 	}
 
 	return subs, nil
+}
+
+// ListSubscriptionNames returns a map of subscription GUID to display name.
+// When filter is provided, filtered IDs are used as fallback names.
+func (c *Checker) ListSubscriptionNames(ctx context.Context, filter []string) (map[string]string, error) {
+	subs, err := c.listSubscriptions(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]string, len(subs))
+	for _, s := range subs {
+		names[s.ID] = s.Name
+	}
+	return names, nil
 }
 
 func (c *Checker) getAssignmentsForSubscription(ctx context.Context, subscriptionID string, principalID string) ([]RoleAssignment, error) {

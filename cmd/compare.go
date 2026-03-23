@@ -22,6 +22,7 @@ import (
 )
 
 var modelFlag string
+var workloadKeyFlag string
 
 var compareCmd = &cobra.Command{
 	Use:   "compare <identity-A> <identity-B>",
@@ -38,7 +39,13 @@ Examples:
   azure-rbac-inventory compare --model <model-id> --file targets.csv
 
   # Export comparison to HTML
-  azure-rbac-inventory compare <id-A> <id-B> --export diff.html`,
+  azure-rbac-inventory compare <id-A> <id-B> --export diff.html
+
+  # Workload-aware model compare (auto-detect workload names)
+  azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius spn-fedrampmod-wkld-zscaler
+
+  # Explicit workload key
+  azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius --workload-key axonius --file targets.csv`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		model, _ := cmd.Flags().GetString("model")
 		file, _ := cmd.Flags().GetString("file")
@@ -65,6 +72,7 @@ Examples:
 
 func init() {
 	compareCmd.Flags().StringVar(&modelFlag, "model", "", "Model identity ID for 1:N comparison")
+	compareCmd.Flags().StringVar(&workloadKeyFlag, "workload-key", "", "Explicit workload name for the golden SPN (auto-detected if omitted)")
 	rootCmd.AddCommand(compareCmd)
 }
 
@@ -85,6 +93,9 @@ func runCompare(cmd *cobra.Command, args []string) error {
 		if len(a) > maxInputLen {
 			return fmt.Errorf("identity argument %q exceeds maximum length of %d characters", a[:50]+"...", maxInputLen)
 		}
+	}
+	if len(workloadKeyFlag) > maxInputLen {
+		return fmt.Errorf("--workload-key value exceeds maximum length of %d characters", maxInputLen)
 	}
 
 	isModelMode := modelFlag != ""
@@ -257,8 +268,17 @@ func runModelCompare(
 		return fmt.Errorf("all target identity checks failed")
 	}
 
-	// Model compare.
-	result := compare.ModelCompare(modelReport, targetReports)
+	// Model compare (workload-aware).
+	result := compare.WorkloadModelCompare(modelReport, targetReports, workloadKeyFlag)
+
+	if result.GoldenWorkload != "" {
+		fmt.Fprintf(os.Stderr, "Workload detected — golden: %s\n", result.GoldenWorkload)
+	}
+	for _, r := range result.Results {
+		if r.WorkloadName != "" {
+			fmt.Fprintf(os.Stderr, "  Target %s — workload: %s\n", r.Target.DisplayName, r.WorkloadName)
+		}
+	}
 
 	return renderModelCompareOutput(result, outputFlag)
 }
