@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-03-23
+
+### Added
+- **Model RBAC reference section** — model compare output (table and HTML) now shows the model identity's full RBAC assignments as a collapsible reference before the target comparison
+- **Full scope path in drift items** — Missing and Extra RBAC items display the full ARM resource ID (scope path) alongside RoleName and ScopeType for unambiguous identification across subscriptions and resource groups
+- Compact shared-item labels omit the scope path for cleaner display
+
 ## [0.5.0] - 2026-03-23
 
 ### Added
