@@ -591,6 +591,48 @@ func TestRBACKey(t *testing.T) {
 	}
 }
 
+func TestModelRBACKey(t *testing.T) {
+	a := rbac.RoleAssignment{RoleName: "Reader", ScopeType: "Subscription", Scope: "/subscriptions/abc"}
+	got := modelRBACKey(a)
+	want := "Reader|Subscription"
+	if got != want {
+		t.Errorf("modelRBACKey() = %q, want %q", got, want)
+	}
+}
+
+func TestModelCompare_StructuralMatchDifferentScopes(t *testing.T) {
+	// Same role + scope type but different subscription paths → should be Shared in model compare.
+	model := &reportpkg.Report{
+		Identity: makeIdentity("Model", "mmm"),
+		Cloud:    "AzureCloud",
+		RBACAssignments: []rbac.RoleAssignment{
+			{RoleName: "Reader", ScopeType: "Subscription", Scope: "/subscriptions/sub-AAA"},
+			{RoleName: "Contributor", ScopeType: "ResourceGroup", Scope: "/subscriptions/sub-AAA/resourceGroups/rg-model"},
+		},
+	}
+	target := &reportpkg.Report{
+		Identity: makeIdentity("Target", "ttt"),
+		Cloud:    "AzureCloud",
+		RBACAssignments: []rbac.RoleAssignment{
+			{RoleName: "Reader", ScopeType: "Subscription", Scope: "/subscriptions/sub-BBB"},
+			{RoleName: "Contributor", ScopeType: "ResourceGroup", Scope: "/subscriptions/sub-BBB/resourceGroups/rg-target"},
+		},
+	}
+
+	mcr := ModelCompare(model, []*reportpkg.Report{target})
+
+	r := mcr.Results[0]
+	if r.MatchPercent != 100.0 {
+		t.Errorf("expected 100%% match (structural), got %.2f%%", r.MatchPercent)
+	}
+	if r.MissingRBAC != 0 {
+		t.Errorf("expected MissingRBAC=0, got %d", r.MissingRBAC)
+	}
+	if r.ExtraRBAC != 0 {
+		t.Errorf("expected ExtraRBAC=0, got %d", r.ExtraRBAC)
+	}
+}
+
 func TestRoleKey(t *testing.T) {
 	r := graph.DirectoryRole{RoleName: "GlobalAdmin"}
 	got := roleKey(r)
