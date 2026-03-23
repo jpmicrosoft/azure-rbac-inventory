@@ -396,7 +396,7 @@ func diffRBACWorkload(aList, bList []rbac.RoleAssignment, keyFnA, keyFnB func(rb
 // goldenWorkload is the explicit workload name for the model SPN (e.g. from a
 // --workload-key flag). If empty, it is auto-detected via ExtractWorkloadName.
 // If detection also fails, the function falls back to the literal ModelCompare.
-func WorkloadModelCompare(model *reportpkg.Report, targets []*reportpkg.Report, goldenWorkload string) *ModelComparisonResult {
+func WorkloadModelCompare(model *reportpkg.Report, targets []*reportpkg.Report, goldenWorkload string, extraEnv map[string]bool) *ModelComparisonResult {
 	if goldenWorkload == "" {
 		goldenWorkload = ExtractWorkloadName(
 			model.Identity.DisplayName,
@@ -408,7 +408,7 @@ func WorkloadModelCompare(model *reportpkg.Report, targets []*reportpkg.Report, 
 	}
 
 	goldenKeyFn := func(a rbac.RoleAssignment) string {
-		ns := NormalizeScope(a.Scope, goldenWorkload, model.SubscriptionNames)
+		ns := NormalizeScope(a.Scope, goldenWorkload, model.SubscriptionNames, extraEnv)
 		return WorkloadScopeKey(a.RoleName, ns)
 	}
 
@@ -433,7 +433,7 @@ func WorkloadModelCompare(model *reportpkg.Report, targets []*reportpkg.Report, 
 		}
 
 		targetKeyFn := func(a rbac.RoleAssignment) string {
-			ns := NormalizeScope(a.Scope, targetWorkload, target.SubscriptionNames)
+			ns := NormalizeScope(a.Scope, targetWorkload, target.SubscriptionNames, extraEnv)
 			return WorkloadScopeKey(a.RoleName, ns)
 		}
 

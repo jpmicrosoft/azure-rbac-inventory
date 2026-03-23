@@ -23,6 +23,7 @@ import (
 
 var modelFlag string
 var workloadKeyFlag string
+var envSegmentsFlag string
 
 var compareCmd = &cobra.Command{
 	Use:   "compare <identity-A> <identity-B>",
@@ -73,6 +74,7 @@ Examples:
 func init() {
 	compareCmd.Flags().StringVar(&modelFlag, "model", "", "Model identity ID for 1:N comparison")
 	compareCmd.Flags().StringVar(&workloadKeyFlag, "workload-key", "", "Explicit workload name for the golden SPN (auto-detected if omitted)")
+	compareCmd.Flags().StringVar(&envSegmentsFlag, "env-segments", "", "Comma-separated extra segments to normalize as {env} (e.g. \"pool,core,shared\")")
 	rootCmd.AddCommand(compareCmd)
 }
 
@@ -96,6 +98,9 @@ func runCompare(cmd *cobra.Command, args []string) error {
 	}
 	if len(workloadKeyFlag) > maxInputLen {
 		return fmt.Errorf("--workload-key value exceeds maximum length of %d characters", maxInputLen)
+	}
+	if len(envSegmentsFlag) > maxInputLen {
+		return fmt.Errorf("--env-segments value exceeds maximum length of %d characters", maxInputLen)
 	}
 
 	isModelMode := modelFlag != ""
@@ -278,7 +283,8 @@ func runModelCompare(
 	}
 
 	// Model compare (workload-aware).
-	result := compare.WorkloadModelCompare(modelReport, targetReports, workloadKeyFlag)
+	extraEnv := parseEnvSegments(envSegmentsFlag)
+	result := compare.WorkloadModelCompare(modelReport, targetReports, workloadKeyFlag, extraEnv)
 
 	if result.GoldenWorkload != "" {
 		fmt.Fprintf(os.Stderr, "Workload detected — golden: %s\n", result.GoldenWorkload)
@@ -475,4 +481,22 @@ func validateExportPath(path string) error {
 	}
 
 	return nil
+}
+
+// parseEnvSegments splits a comma-separated --env-segments value into a set.
+func parseEnvSegments(raw string) map[string]bool {
+	if raw == "" {
+		return nil
+	}
+	result := make(map[string]bool)
+	for _, seg := range strings.Split(raw, ",") {
+		seg = strings.TrimSpace(strings.ToLower(seg))
+		if seg != "" {
+			result[seg] = true
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
