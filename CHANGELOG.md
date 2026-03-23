@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-23
+
+### Added
+- **Compare subcommand** — `azure-rbac-inventory compare <id-A> <id-B>` for 1:1 identity RBAC comparison
+- **Model compare mode** — `compare --model <model-id> <targets...>` for 1:N comparison with match percentage scoring
+- Compare diffs across RBAC role assignments, directory roles, group memberships, and access packages
+- HTML and JSON export for comparison results (`--export diff.html`)
+- Table and JSON stdout output formats for comparisons
+
+### Security
+- Scope-aware RBAC diff — comparison keys use full scope path, not just scope type
+- Export path validation — rejects symlinks and verifies parent directory before writing
+- Input length validation — 256-character max on `--model` flag and positional args
+- Memory-bounded model compare — maxTargets capped at 200
+- Explicit error for unsupported output formats (csv/markdown) instead of silent fallthrough
+
 ## [0.2.0] - 2026-03-20
 
 ### Added
