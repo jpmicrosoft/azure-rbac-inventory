@@ -79,7 +79,8 @@ type ModelTargetResult struct {
 type ModelComparisonResult struct {
 	Model          *identity.Identity
 	Cloud          string
-	GoldenWorkload string `json:"goldenWorkload,omitempty"`
+	GoldenWorkload string                `json:"goldenWorkload,omitempty"`
+	ModelRBAC      []rbac.RoleAssignment `json:"modelRBAC,omitempty"`
 	Results        []ModelTargetResult
 }
 
@@ -415,6 +416,7 @@ func WorkloadModelCompare(model *reportpkg.Report, targets []*reportpkg.Report, 
 		Model:          model.Identity,
 		Cloud:          model.Cloud,
 		GoldenWorkload: goldenWorkload,
+		ModelRBAC:      model.RBACAssignments,
 		Results:        make([]ModelTargetResult, 0, len(targets)),
 	}
 
@@ -513,9 +515,10 @@ func WorkloadModelCompare(model *reportpkg.Report, targets []*reportpkg.Report, 
 // at the same scope level is treated as a match regardless of exact scope path.
 func ModelCompare(model *reportpkg.Report, targets []*reportpkg.Report) *ModelComparisonResult {
 	mcr := &ModelComparisonResult{
-		Model:   model.Identity,
-		Cloud:   model.Cloud,
-		Results: make([]ModelTargetResult, 0, len(targets)),
+		Model:     model.Identity,
+		Cloud:     model.Cloud,
+		ModelRBAC: model.RBACAssignments,
+		Results:   make([]ModelTargetResult, 0, len(targets)),
 	}
 
 	for _, target := range targets {

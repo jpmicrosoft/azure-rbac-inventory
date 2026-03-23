@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Search bar in HTML model compare report to filter target summary table
 - Clickable target names in HTML summary linking to drift detail sections
+- **Model RBAC reference section** — model compare output (table and HTML) now shows the model identity's RBAC assignments as a reference before the target comparison
+- **Full scope path in drift items** — Missing and Extra RBAC items in both 1:1 and model compare now display the full ARM resource ID (scope path) alongside RoleName and ScopeType for unambiguous identification
+- Compact shared-item labels (`rbacLabelShort`) omit the scope path since shared items already match
 
 ### Fixed
 - **Structural RBAC matching in model compare** — same role at the same scope level (e.g. Reader at any Subscription) is now treated as a match regardless of exact scope path, preventing false "Missing + Extra" pairs

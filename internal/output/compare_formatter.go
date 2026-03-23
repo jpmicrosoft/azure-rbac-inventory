@@ -34,8 +34,13 @@ func printCompareHeader(result *compare.ComparisonResult) {
 	fmt.Println()
 }
 
-// rbacLabel formats an RBAC assignment for display: "RoleName (ScopeType)".
+// rbacLabel formats an RBAC assignment for display: "RoleName (ScopeType) — Scope".
 func rbacLabel(a rbac.RoleAssignment) string {
+	return fmt.Sprintf("%s (%s) — %s", a.RoleName, a.ScopeType, a.Scope)
+}
+
+// rbacLabelShort formats an RBAC assignment without scope path for compact display.
+func rbacLabelShort(a rbac.RoleAssignment) string {
 	return fmt.Sprintf("%s (%s)", a.RoleName, a.ScopeType)
 }
 
@@ -99,7 +104,7 @@ func printRBACDiff(result *compare.ComparisonResult) {
 		seen := map[string]*sharedEntry{}
 		order := []string{}
 		for _, a := range diff.Shared {
-			lbl := rbacLabel(a)
+			lbl := rbacLabelShort(a)
 			if e, ok := seen[lbl]; ok {
 				e.count++
 			} else {
@@ -277,6 +282,15 @@ func printModelHeader(result *compare.ModelComparisonResult) {
 		fmt.Printf("    Workload: %s (auto-detected)\n", result.GoldenWorkload)
 	}
 	fmt.Println()
+
+	if len(result.ModelRBAC) > 0 {
+		fmt.Printf("  [MODEL RBAC] %s Assignments (%d)\n", result.Model.DisplayName, len(result.ModelRBAC))
+		fmt.Println("  " + strings.Repeat("-", 54))
+		for _, a := range result.ModelRBAC {
+			fmt.Printf("      • %s\n", rbacLabel(a))
+		}
+		fmt.Println()
+	}
 }
 
 // missingExtraSummary formats a combined count label like "3 RBAC" or "3 RBAC, 1 Role".
