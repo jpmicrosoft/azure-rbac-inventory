@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-23
+
+### Added
+- **Workload-aware model comparison** — `compare --model <id> --workload-key <name>` for intelligent RBAC pattern matching across workload-specific identities
+- Auto-detection of workload name from RBAC scope paths when `--workload-key` is omitted
+- Scope normalization — replaces workload-specific segments with `{workload}` placeholder for structural comparison
+- Noise segment filtering to improve workload name detection accuracy
+
+### Security
+- Input length validation extended to `--workload-key` flag (256-character max)
+
 ## [0.3.0] - 2026-03-23
 
 ### Added
