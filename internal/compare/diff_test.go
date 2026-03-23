@@ -718,7 +718,7 @@ func TestWorkloadModelCompare_BasicMatch(t *testing.T) {
 		},
 	)
 
-	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "")
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "", nil)
 
 	if len(result.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(result.Results))
@@ -759,25 +759,27 @@ func TestWorkloadModelCompare_Drift(t *testing.T) {
 		},
 	)
 
-	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "")
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "", nil)
 
 	if len(result.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(result.Results))
 	}
 	r := result.Results[0]
 
-	// Normalized keys — golden: Reader|hub, Contributor|spoke, Key Vault Admin|hub
-	// target: Reader|prod, Contributor|spoke
-	// Shared: Contributor|spoke (1), Missing: Reader|hub + KV Admin|hub (2), Extra: Reader|prod (1)
-	if r.MissingRBAC != 2 {
-		t.Errorf("expected MissingRBAC=2, got %d", r.MissingRBAC)
+	// With env normalization, hub and prod both become {env}, so both
+	// subscriptions normalize to azg-sub-{workload}-{env}-{n}.
+	// Golden keys: Reader|..{env}.., Contributor|..{env}.., Key Vault Admin|..{env}..
+	// Target keys: Reader|..{env}.., Contributor|..{env}..
+	// Shared: Reader + Contributor (2), Missing: Key Vault Admin (1), Extra: 0
+	if r.MissingRBAC != 1 {
+		t.Errorf("expected MissingRBAC=1, got %d", r.MissingRBAC)
 	}
-	if r.ExtraRBAC != 1 {
-		t.Errorf("expected ExtraRBAC=1, got %d", r.ExtraRBAC)
+	if r.ExtraRBAC != 0 {
+		t.Errorf("expected ExtraRBAC=0, got %d", r.ExtraRBAC)
 	}
 
-	// shared=1, max(golden=3, target=2)=3 → 1/3 ≈ 33.33%
-	wantPct := float64(1) / float64(3) * 100.0
+	// shared=2, max(golden=3, target=2)=3 → 2/3 ≈ 66.67%
+	wantPct := float64(2) / float64(3) * 100.0
 	if !floatClose(r.MatchPercent, wantPct) {
 		t.Errorf("expected MatchPercent≈%.2f, got %.2f", wantPct, r.MatchPercent)
 	}
@@ -806,7 +808,7 @@ func TestWorkloadModelCompare_ExplicitWorkloadKey(t *testing.T) {
 		},
 	)
 
-	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "contoso")
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "contoso", nil)
 
 	// Explicit workload key should be stored in result.
 	if result.GoldenWorkload != "contoso" {
@@ -840,7 +842,7 @@ func TestWorkloadModelCompare_FallbackNoWorkload(t *testing.T) {
 	)
 
 	// No discernible workload name — should fall back gracefully.
-	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "")
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "", nil)
 
 	if result == nil {
 		t.Fatal("expected non-nil result")
@@ -905,7 +907,7 @@ func TestWorkloadModelCompare_MultipleTargets(t *testing.T) {
 		},
 	)
 
-	result := WorkloadModelCompare(golden, []*reportpkg.Report{t1, t2, t3}, "")
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{t1, t2, t3}, "", nil)
 
 	if len(result.Results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(result.Results))
@@ -926,8 +928,10 @@ func TestWorkloadModelCompare_MultipleTargets(t *testing.T) {
 		t.Errorf("expected litware MatchPercent≈100, got %.2f", result.Results[0].MatchPercent)
 	}
 
-	// fabrikam: shared=1 (Contributor|spoke), max(3,2)=3 → 33.33%
-	wantPartialPct := float64(1) / float64(3) * 100.0
+	// fabrikam: with env normalization, hub/spoke/prod all become {env},
+	// so Reader + Contributor match (shared=2), only Key Vault Admin missing.
+	// 2/3 ≈ 66.67%
+	wantPartialPct := float64(2) / float64(3) * 100.0
 	if !floatClose(result.Results[1].MatchPercent, wantPartialPct) {
 		t.Errorf("expected fabrikam MatchPercent≈%.2f, got %.2f", wantPartialPct, result.Results[1].MatchPercent)
 	}
@@ -963,15 +967,15 @@ func TestWorkloadModelCompare_CommonScopes(t *testing.T) {
 		},
 	)
 
-	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "")
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "", nil)
 
 	if len(result.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(result.Results))
 	}
 	r := result.Results[0]
 
-	// Workload-specific sub normalizes: Reader|azg-sub-{workload}-hub-01 → match.
-	// Common sub has no workload name: Reader|azg-sub-shared-services-01 → exact match.
+	// Workload-specific sub normalizes: Reader|azg-sub-{workload}-{env}-{n} → match.
+	// Common sub has no workload name: Reader|azg-sub-shared-services-{n} → exact match.
 	if !floatClose(r.MatchPercent, 100.0) {
 		t.Errorf("expected MatchPercent≈100, got %.2f", r.MatchPercent)
 	}

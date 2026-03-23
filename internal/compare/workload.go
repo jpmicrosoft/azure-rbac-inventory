@@ -23,6 +23,25 @@ var noiseSegments = map[string]bool{
 	"05":      true,
 }
 
+// envSegments contains environment and topology-tier segments that are
+// normalized to {env} during scope comparison. This is the built-in set;
+// users can extend it via --env-segments.
+var envSegments = map[string]bool{
+	"prod":    true,
+	"dev":     true,
+	"stg":     true,
+	"staging": true,
+	"mod":     true,
+	"uat":     true,
+	"qa":      true,
+	"test":    true,
+	"sandbox": true,
+	"nonprod": true,
+	"preprod": true,
+	"hub":     true,
+	"spoke":   true,
+}
+
 // isNoiseSegment reports whether seg should be ignored during common-segment
 // detection. A segment is noise if it is in the noiseSegments set, is all
 // digits, or is 1-2 characters long.
@@ -33,14 +52,39 @@ func isNoiseSegment(seg string) bool {
 	if noiseSegments[seg] {
 		return true
 	}
-	allDigits := true
-	for _, r := range seg {
+	return isAllDigits(seg)
+}
+
+// isAllDigits reports whether s is non-empty and contains only ASCII digits.
+func isAllDigits(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for _, r := range s {
 		if r < '0' || r > '9' {
-			allDigits = false
-			break
+			return false
 		}
 	}
-	return allDigits
+	return true
+}
+
+// normalizeNameSegments replaces known environment/topology segments with {env}
+// and pure-numeric segments with {n} in a hyphen-delimited name.
+// extraEnv contains additional user-defined segments to treat as {env}.
+func normalizeNameSegments(name string, extraEnv map[string]bool) string {
+	segments := strings.Split(name, "-")
+	for i, seg := range segments {
+		lower := strings.ToLower(seg)
+		if envSegments[lower] || extraEnv[lower] {
+			segments[i] = "{env}"
+			continue
+		}
+		if isAllDigits(seg) {
+			segments[i] = "{n}"
+			continue
+		}
+	}
+	return strings.Join(segments, "-")
 }
 
 // ExtractWorkloadName extracts the workload name from an SPN display name,
@@ -90,10 +134,12 @@ func ExtractWorkloadName(spnName string, subNames []string) string {
 }
 
 // NormalizeScope normalizes an ARM scope path by replacing the workload name
-// with {workload}. It returns a simplified path of the form:
+// with {workload}, known environment/topology segments with {env}, and numeric
+// segments with {n}. extraEnv contains additional user-defined environment
+// segments. It returns a simplified path of the form:
 //
 //	normalizedSubName[/normalizedRGName[/resourceType/normalizedResourceName]]
-func NormalizeScope(scope string, workloadName string, subNames map[string]string) string {
+func NormalizeScope(scope string, workloadName string, subNames map[string]string, extraEnv map[string]bool) string {
 	if !strings.Contains(strings.ToLower(scope), "/subscriptions/") {
 		return scope
 	}
@@ -115,6 +161,7 @@ func NormalizeScope(scope string, workloadName string, subNames map[string]strin
 	if workloadName != "" && subDisplayName != "" {
 		normalizedSub = replaceInsensitive(subDisplayName, workloadName, "{workload}")
 	}
+	normalizedSub = normalizeNameSegments(normalizedSub, extraEnv)
 
 	// Find resource group name
 	var rgName string
@@ -136,6 +183,7 @@ func NormalizeScope(scope string, workloadName string, subNames map[string]strin
 	if workloadName != "" {
 		normalizedRG = replaceInsensitive(rgName, workloadName, "{workload}")
 	}
+	normalizedRG = normalizeNameSegments(normalizedRG, extraEnv)
 
 	// Check for resource-level scope (segments after the RG)
 	remaining := parts[rgIdx+1:]
@@ -149,6 +197,7 @@ func NormalizeScope(scope string, workloadName string, subNames map[string]strin
 			if workloadName != "" {
 				normalizedRes = replaceInsensitive(resourceName, workloadName, "{workload}")
 			}
+			normalizedRes = normalizeNameSegments(normalizedRes, extraEnv)
 			return normalizedSub + "/" + normalizedRG + "/" + resourceType + "/" + normalizedRes
 		}
 	}
