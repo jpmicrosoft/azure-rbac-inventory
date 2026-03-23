@@ -297,8 +297,11 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
   <details open>
     <summary>Target Summary <span class="section-count">{{len .Result.Results}}</span></summary>
     <div class="section-body">
+      <input type="text" id="target-search" placeholder="Search targets by name, type, or workload…"
+        style="width: 100%; padding: 8px 12px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.9em; box-sizing: border-box;"
+        oninput="(function(v){var rows=document.querySelectorAll('#target-table tbody tr');v=v.toLowerCase();rows.forEach(function(r){r.style.display=r.textContent.toLowerCase().indexOf(v)!==-1?'':'none'})})(this.value)">
       <div class="table-wrap">
-      <table>
+      <table id="target-table">
         <thead>
           <tr>
             <th>Target</th>
@@ -316,7 +319,7 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
         <tbody>
           {{range .Result.Results}}
           <tr>
-            <td>{{.Target.DisplayName}}</td>
+            <td>{{if lt .MatchPercent 100.0}}<a href="#target-{{.Target.ObjectID}}" style="color: var(--primary); text-decoration: none; font-weight: 500;">{{.Target.DisplayName}}</a>{{else}}{{.Target.DisplayName}}{{end}}</td>
             <td>{{.Target.Type}}</td>
             <td>{{if .WorkloadName}}{{.WorkloadName}}{{else}}-{{end}}</td>
             <td>
@@ -339,7 +342,7 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
 
   {{range .Result.Results}}
   {{if lt .MatchPercent 100.0}}
-  <details>
+  <details id="target-{{.Target.ObjectID}}">
     {{if .WorkloadName}}
     <summary>{{.Target.DisplayName}} ({{.WorkloadName}}) – {{printf "%.0f" .MatchPercent}}% Match <span class="section-count">drift</span></summary>
     {{else}}

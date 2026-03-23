@@ -227,6 +227,10 @@ func runModelCompare(
 	if err != nil {
 		return fmt.Errorf("failed to check model identity (%s): %w", modelID, err)
 	}
+	if modelReport.Identity.Type == identity.TypeApplication {
+		return fmt.Errorf("model identity %s (%s) is an Application registration — applications do not have RBAC assignments; use the corresponding service principal instead",
+			modelReport.Identity.DisplayName, modelID)
+	}
 
 	// Resolve all target identities.
 	var targetIDs []string
@@ -259,6 +263,11 @@ func runModelCompare(
 		rpt, err := checker.Run(ctx, cred, env, cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to process target %s: %v\n", id, err)
+			continue
+		}
+		if rpt.Identity.Type == identity.TypeApplication {
+			fmt.Fprintf(os.Stderr, "Warning: skipping target %s (%s) — Application registrations are not supported in model compare\n",
+				rpt.Identity.DisplayName, id)
 			continue
 		}
 		targetReports = append(targetReports, rpt)

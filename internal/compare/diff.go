@@ -90,6 +90,14 @@ func rbacKey(a rbac.RoleAssignment) string {
 	return a.RoleName + "|" + a.Scope
 }
 
+// modelRBACKey returns a structural comparison key for model compare.
+// Uses RoleName + ScopeType so that the same role at the same scope level
+// (e.g. Reader at any Subscription) is treated as a match regardless of
+// which specific subscription.
+func modelRBACKey(a rbac.RoleAssignment) string {
+	return a.RoleName + "|" + a.ScopeType
+}
+
 // roleKey returns the comparison key for a directory role.
 func roleKey(r graph.DirectoryRole) string {
 	return r.RoleName
@@ -501,6 +509,8 @@ func WorkloadModelCompare(model *reportpkg.Report, targets []*reportpkg.Report, 
 }
 
 // ModelCompare compares a model report against multiple target reports.
+// Uses structural RBAC matching (RoleName + ScopeType) so that the same role
+// at the same scope level is treated as a match regardless of exact scope path.
 func ModelCompare(model *reportpkg.Report, targets []*reportpkg.Report) *ModelComparisonResult {
 	mcr := &ModelComparisonResult{
 		Model:   model.Identity,
@@ -509,17 +519,52 @@ func ModelCompare(model *reportpkg.Report, targets []*reportpkg.Report) *ModelCo
 	}
 
 	for _, target := range targets {
-		comp := CompareReports(model, target)
+		rbacDiff := diffRBACWorkload(
+			model.RBACAssignments, target.RBACAssignments,
+			modelRBACKey, modelRBACKey,
+		)
+		roleDiff := diffRoles(model.DirectoryRoles, target.DirectoryRoles)
+		groupDiff := diffGroups(model.GroupMemberships, target.GroupMemberships)
+		pkgDiff := diffPackages(model.AccessPackages, target.AccessPackages)
+
+		sharedTotal := len(rbacDiff.Shared) + len(roleDiff.Shared) +
+			len(groupDiff.Shared) + len(pkgDiff.Shared)
+		totalA := len(model.RBACAssignments) + len(model.DirectoryRoles) +
+			len(model.GroupMemberships) + len(model.AccessPackages)
+		totalB := len(target.RBACAssignments) + len(target.DirectoryRoles) +
+			len(target.GroupMemberships) + len(target.AccessPackages)
+		maxTotal := totalA
+		if totalB > maxTotal {
+			maxTotal = totalB
+		}
+		matchPct := 100.0
+		if maxTotal > 0 {
+			matchPct = float64(sharedTotal) / float64(maxTotal) * 100.0
+		}
+
+		comp := &ComparisonResult{
+			IdentityA:      model.Identity,
+			IdentityB:      target.Identity,
+			Cloud:          model.Cloud,
+			RBAC:           rbacDiff,
+			DirectoryRoles: roleDiff,
+			Groups:         groupDiff,
+			AccessPackages: pkgDiff,
+			WarningsA:      model.Warnings,
+			WarningsB:      target.Warnings,
+			MatchPercent:   matchPct,
+		}
+
 		mtr := ModelTargetResult{
 			Target:        target.Identity,
 			Comparison:    comp,
-			MatchPercent:  comp.MatchPercent,
-			MissingRBAC:   len(comp.RBAC.OnlyA),
-			ExtraRBAC:     len(comp.RBAC.OnlyB),
-			MissingRoles:  len(comp.DirectoryRoles.OnlyA),
-			ExtraRoles:    len(comp.DirectoryRoles.OnlyB),
-			MissingGroups: len(comp.Groups.OnlyA),
-			ExtraGroups:   len(comp.Groups.OnlyB),
+			MatchPercent:  matchPct,
+			MissingRBAC:   len(rbacDiff.OnlyA),
+			ExtraRBAC:     len(rbacDiff.OnlyB),
+			MissingRoles:  len(roleDiff.OnlyA),
+			ExtraRoles:    len(roleDiff.OnlyB),
+			MissingGroups: len(groupDiff.OnlyA),
+			ExtraGroups:   len(groupDiff.OnlyB),
 		}
 		mcr.Results = append(mcr.Results, mtr)
 	}
