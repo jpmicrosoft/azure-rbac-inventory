@@ -16,6 +16,7 @@ type Report struct {
 	AccessRequests        []graph.AccessPackageRequest    `json:"accessPackageRequests"`
 	GroupMemberships      []graph.GroupMembership         `json:"groupMemberships"`
 	Warnings              []string                        `json:"warnings,omitempty"`
+	SubscriptionNames     map[string]string               `json:"subscriptionNames,omitempty"`
 	SkippedAccessPackages bool                            `json:"skippedAccessPackages,omitempty"`
 }
 

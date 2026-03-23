@@ -273,6 +273,9 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
       <div class="meta-item"><span class="meta-label">Name</span><span class="meta-value">{{.Result.Model.DisplayName}}</span></div>
       <div class="meta-item"><span class="meta-label">Object ID</span><span class="meta-value mono">{{.Result.Model.ObjectID}}</span></div>
       <div class="meta-item"><span class="meta-label">Type</span><span class="meta-value">{{.Result.Model.Type}}</span></div>
+      {{if .Result.GoldenWorkload}}
+      <div class="meta-item"><span class="meta-label">Workload</span><span class="meta-value">{{.Result.GoldenWorkload}}</span></div>
+      {{end}}
     </div>
   </div>
 
@@ -300,6 +303,7 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
           <tr>
             <th>Target</th>
             <th>Type</th>
+            <th>Workload</th>
             <th>Match</th>
             <th>Missing RBAC</th>
             <th>Extra RBAC</th>
@@ -314,6 +318,7 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
           <tr>
             <td>{{.Target.DisplayName}}</td>
             <td>{{.Target.Type}}</td>
+            <td>{{if .WorkloadName}}{{.WorkloadName}}{{else}}-{{end}}</td>
             <td>
               {{printf "%.0f" .MatchPercent}}%
               <div class="match-bar"><div class="match-fill" style="width: {{printf "%.0f" .MatchPercent}}%"></div></div>
@@ -335,7 +340,11 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
   {{range .Result.Results}}
   {{if lt .MatchPercent 100.0}}
   <details>
+    {{if .WorkloadName}}
+    <summary>{{.Target.DisplayName}} ({{.WorkloadName}}) – {{printf "%.0f" .MatchPercent}}% Match <span class="section-count">drift</span></summary>
+    {{else}}
     <summary>{{.Target.DisplayName}} – {{printf "%.0f" .MatchPercent}}% Match <span class="section-count">drift</span></summary>
+    {{end}}
     <div class="section-body">
       {{$nameA := $.Result.Model.DisplayName}}
       {{$nameB := .Target.DisplayName}}

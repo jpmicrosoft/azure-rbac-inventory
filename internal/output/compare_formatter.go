@@ -273,6 +273,9 @@ func printModelHeader(result *compare.ModelComparisonResult) {
 	fmt.Println()
 	fmt.Printf("    Model:  %s (%s)\n", result.Model.DisplayName, string(result.Model.Type))
 	fmt.Printf("    Cloud:  %s\n", result.Cloud)
+	if result.GoldenWorkload != "" {
+		fmt.Printf("    Workload: %s (auto-detected)\n", result.GoldenWorkload)
+	}
 	fmt.Println()
 }
 
@@ -299,8 +302,8 @@ func printModelSummary(result *compare.ModelComparisonResult) {
 	fmt.Println("  " + strings.Repeat("-", 54))
 
 	w := tabwriter.NewWriter(os.Stdout, 2, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "    IDENTITY\tMATCH\tMISSING\tEXTRA\tSTATUS")
-	fmt.Fprintln(w, "    "+strings.Repeat("-", 27)+"\t"+strings.Repeat("-", 7)+"\t"+strings.Repeat("-", 8)+"\t"+strings.Repeat("-", 8)+"\t"+strings.Repeat("-", 10))
+	fmt.Fprintln(w, "    IDENTITY\tWORKLOAD\tMATCH\tMISSING\tEXTRA\tSTATUS")
+	fmt.Fprintln(w, "    "+strings.Repeat("-", 27)+"\t"+strings.Repeat("-", 12)+"\t"+strings.Repeat("-", 7)+"\t"+strings.Repeat("-", 8)+"\t"+strings.Repeat("-", 8)+"\t"+strings.Repeat("-", 10))
 
 	for _, r := range result.Results {
 		missTotal := r.MissingRBAC + r.MissingRoles + r.MissingGroups
@@ -311,8 +314,12 @@ func printModelSummary(result *compare.ModelComparisonResult) {
 		}
 		missing := missingExtraSummary(r.MissingRBAC, r.MissingRoles, r.MissingGroups)
 		extra := missingExtraSummary(r.ExtraRBAC, r.ExtraRoles, r.ExtraGroups)
-		fmt.Fprintf(w, "    %s\t%.1f%%\t%s\t%s\t%s\n",
-			r.Target.DisplayName, r.MatchPercent, missing, extra, status)
+		workload := r.WorkloadName
+		if workload == "" {
+			workload = "-"
+		}
+		fmt.Fprintf(w, "    %s\t%s\t%.1f%%\t%s\t%s\t%s\n",
+			r.Target.DisplayName, workload, r.MatchPercent, missing, extra, status)
 	}
 	_ = w.Flush()
 	fmt.Println()
@@ -332,7 +339,11 @@ func printModelDetails(result *compare.ModelComparisonResult) {
 			continue // skip 100% matches
 		}
 
-		fmt.Printf("  [DETAIL] %s — %.1f%% match\n", r.Target.DisplayName, r.MatchPercent)
+		if r.WorkloadName != "" {
+			fmt.Printf("  [DETAIL] %s (workload: %s) — %.1f%% match\n", r.Target.DisplayName, r.WorkloadName, r.MatchPercent)
+		} else {
+			fmt.Printf("  [DETAIL] %s — %.1f%% match\n", r.Target.DisplayName, r.MatchPercent)
+		}
 		fmt.Println("  " + strings.Repeat("-", 54))
 
 		comp := r.Comparison

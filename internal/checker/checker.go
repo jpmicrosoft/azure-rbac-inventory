@@ -85,6 +85,7 @@ func Run(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environm
 	var mu sync.Mutex
 	var allWarnings []string
 	var rbacAssignments []rbac.RoleAssignment
+	var subNameMap map[string]string
 	var dirRoles []graph.DirectoryRole
 	var apAssignments []graph.AccessPackageAssignment
 	var apRequests []graph.AccessPackageRequest
@@ -99,6 +100,13 @@ func Run(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environm
 			fmt.Fprintf(os.Stderr, "Warning: RBAC query failed: %v\n", err)
 		} else {
 			fmt.Fprintf(os.Stderr, "RBAC role assignments: %d found\n", len(rbacAssignments))
+		}
+		// Resolve subscription display names
+		names, nameErr := rbacChecker.ListSubscriptionNames(gctx, cfg.Subscriptions)
+		if nameErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: subscription name lookup failed: %v\n", nameErr)
+		} else {
+			subNameMap = names
 		}
 		mu.Lock()
 		allWarnings = append(allWarnings, warns...)
@@ -161,6 +169,7 @@ func Run(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environm
 	}
 
 	report.RBACAssignments = rbacAssignments
+	report.SubscriptionNames = subNameMap
 	report.DirectoryRoles = dirRoles
 	report.AccessPackages = apAssignments
 	report.AccessRequests = apRequests
