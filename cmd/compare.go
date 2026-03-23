@@ -76,6 +76,17 @@ func runCompare(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--concurrency must be between 1 and 50, got %d", concurrencyFlag)
 	}
 
+	// Validate input lengths to prevent oversized API requests.
+	const maxInputLen = 256
+	if len(modelFlag) > maxInputLen {
+		return fmt.Errorf("--model value exceeds maximum length of %d characters", maxInputLen)
+	}
+	for _, a := range args {
+		if len(a) > maxInputLen {
+			return fmt.Errorf("identity argument %q exceeds maximum length of %d characters", a[:50]+"...", maxInputLen)
+		}
+	}
+
 	isModelMode := modelFlag != ""
 
 	// Collect target entries from positional args and --file.
@@ -221,7 +232,7 @@ func runModelCompare(
 		return fmt.Errorf("no target identities to compare")
 	}
 
-	const maxTargets = 1000
+	const maxTargets = 200
 	if len(targetIDs) > maxTargets {
 		return fmt.Errorf("resolved %d target identities, exceeding maximum of %d; narrow your search", len(targetIDs), maxTargets)
 	}
@@ -310,8 +321,10 @@ func renderCompareOutput(result *compare.ComparisonResult, format string) error 
 		if err := enc.Encode(result); err != nil {
 			return err
 		}
-	case "table", "csv", "markdown":
+	case "table":
 		output.PrintCompare(result)
+	case "csv", "markdown":
+		return fmt.Errorf("output format %q is not supported for compare — use table, json, or --export .html", format)
 	default:
 		return fmt.Errorf("invalid output format %q — valid values: table, json, csv, markdown", format)
 	}
@@ -357,8 +370,10 @@ func renderModelCompareOutput(result *compare.ModelComparisonResult, format stri
 		if err := enc.Encode(result); err != nil {
 			return err
 		}
-	case "table", "csv", "markdown":
+	case "table":
 		output.PrintModelCompare(result)
+	case "csv", "markdown":
+		return fmt.Errorf("output format %q is not supported for model compare — use table, json, or --export .html", format)
 	default:
 		return fmt.Errorf("invalid output format %q — valid values: table, json, csv, markdown", format)
 	}
