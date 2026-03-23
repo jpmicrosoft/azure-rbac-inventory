@@ -518,14 +518,10 @@ func ModelCompare(model *reportpkg.Report, targets []*reportpkg.Report) *ModelCo
 		Results: make([]ModelTargetResult, 0, len(targets)),
 	}
 
-	structuralKeyFn := func(a rbac.RoleAssignment) string {
-		return modelRBACKey(a)
-	}
-
 	for _, target := range targets {
 		rbacDiff := diffRBACWorkload(
 			model.RBACAssignments, target.RBACAssignments,
-			structuralKeyFn, structuralKeyFn,
+			modelRBACKey, modelRBACKey,
 		)
 		roleDiff := diffRoles(model.DirectoryRoles, target.DirectoryRoles)
 		groupDiff := diffGroups(model.GroupMemberships, target.GroupMemberships)
