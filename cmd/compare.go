@@ -94,6 +94,9 @@ func runCompare(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("identity argument %q exceeds maximum length of %d characters", a[:50]+"...", maxInputLen)
 		}
 	}
+	if len(workloadKeyFlag) > maxInputLen {
+		return fmt.Errorf("--workload-key value exceeds maximum length of %d characters", maxInputLen)
+	}
 
 	isModelMode := modelFlag != ""
 
