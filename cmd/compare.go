@@ -354,6 +354,9 @@ func exportCompareResult(result *compare.ComparisonResult, path string) error {
 		return fmt.Errorf("formatting export: %w", err)
 	}
 
+	if err := validateExportPath(path); err != nil {
+		return err
+	}
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("writing export file: %w", err)
 	}
@@ -403,9 +406,44 @@ func exportModelCompareResult(result *compare.ModelComparisonResult, path string
 		return fmt.Errorf("formatting export: %w", err)
 	}
 
+	if err := validateExportPath(path); err != nil {
+		return err
+	}
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("writing export file: %w", err)
 	}
 	fmt.Fprintf(os.Stderr, "Exported model comparison to %s\n", path)
+	return nil
+}
+
+// validateExportPath checks that the export path is safe to write to.
+// It rejects symlinks and ensures the parent directory exists.
+func validateExportPath(path string) error {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolving export path: %w", err)
+	}
+
+	// Reject if the target already exists and is a symlink.
+	fi, err := os.Lstat(absPath)
+	if err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("export path %q is a symlink — refusing to overwrite for safety", path)
+		}
+	}
+
+	// Ensure parent directory exists and is not a symlink.
+	dir := filepath.Dir(absPath)
+	dirInfo, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("export directory %q does not exist", dir)
+	}
+	if dirInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("export directory %q is a symlink — refusing to write for safety", dir)
+	}
+	if !dirInfo.IsDir() {
+		return fmt.Errorf("export path parent %q is not a directory", dir)
+	}
+
 	return nil
 }

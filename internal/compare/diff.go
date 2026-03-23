@@ -82,8 +82,10 @@ type ModelComparisonResult struct {
 }
 
 // rbacKey returns the comparison key for an RBAC assignment.
+// Uses the full Scope path (not just ScopeType) so that assignments at
+// different scopes (e.g. two different subscriptions) are not conflated.
 func rbacKey(a rbac.RoleAssignment) string {
-	return a.RoleName + "|" + a.ScopeType
+	return a.RoleName + "|" + a.Scope
 }
 
 // roleKey returns the comparison key for a directory role.

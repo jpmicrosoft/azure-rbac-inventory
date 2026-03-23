@@ -200,7 +200,7 @@ func TestCompareReports_PartialOverlap(t *testing.T) {
 }
 
 func TestCompareReports_RBACKeyByScopeType(t *testing.T) {
-	// Same role name + scope type, but different subscriptions → should be Shared.
+	// Same role name but different scopes → should now be OnlyA/OnlyB (scope-aware).
 	a := &reportpkg.Report{
 		Identity: makeIdentity("A", "aaa"),
 		Cloud:    "AzureCloud",
@@ -213,6 +213,30 @@ func TestCompareReports_RBACKeyByScopeType(t *testing.T) {
 		Cloud:    "AzureCloud",
 		RBACAssignments: []rbac.RoleAssignment{
 			{RoleName: "Contributor", ScopeType: "Subscription", Scope: "/subscriptions/sub-BBB"},
+		},
+	}
+
+	result := CompareReports(a, b)
+
+	assertLen(t, "RBAC.Shared", result.RBAC.Shared, 0)
+	assertLen(t, "RBAC.OnlyA", result.RBAC.OnlyA, 1)
+	assertLen(t, "RBAC.OnlyB", result.RBAC.OnlyB, 1)
+}
+
+func TestCompareReports_RBACKeyByScopeSameScope(t *testing.T) {
+	// Same role name + same scope → should be Shared.
+	a := &reportpkg.Report{
+		Identity: makeIdentity("A", "aaa"),
+		Cloud:    "AzureCloud",
+		RBACAssignments: []rbac.RoleAssignment{
+			{RoleName: "Contributor", ScopeType: "Subscription", Scope: "/subscriptions/sub-SAME"},
+		},
+	}
+	b := &reportpkg.Report{
+		Identity: makeIdentity("B", "bbb"),
+		Cloud:    "AzureCloud",
+		RBACAssignments: []rbac.RoleAssignment{
+			{RoleName: "Contributor", ScopeType: "Subscription", Scope: "/subscriptions/sub-SAME"},
 		},
 	}
 
@@ -559,9 +583,9 @@ func TestModelCompare_PerfectMatch(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRBACKey(t *testing.T) {
-	a := rbac.RoleAssignment{RoleName: "Reader", ScopeType: "Subscription"}
+	a := rbac.RoleAssignment{RoleName: "Reader", ScopeType: "Subscription", Scope: "/subscriptions/abc"}
 	got := rbacKey(a)
-	want := "Reader|Subscription"
+	want := "Reader|/subscriptions/abc"
 	if got != want {
 		t.Errorf("rbacKey() = %q, want %q", got, want)
 	}
