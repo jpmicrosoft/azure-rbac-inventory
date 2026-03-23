@@ -42,10 +42,10 @@ Examples:
   azure-rbac-inventory compare <id-A> <id-B> --export diff.html
 
   # Workload-aware model compare (auto-detect workload names)
-  azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius spn-fedrampmod-wkld-zscaler
+  azure-rbac-inventory compare --model spn-platform-wkld-contoso spn-platform-wkld-litware
 
   # Explicit workload key
-  azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius --workload-key axonius --file targets.csv`,
+  azure-rbac-inventory compare --model spn-platform-wkld-contoso --workload-key contoso --file targets.csv`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		model, _ := cmd.Flags().GetString("model")
 		file, _ := cmd.Flags().GetString("file")

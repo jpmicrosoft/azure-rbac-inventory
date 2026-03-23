@@ -654,10 +654,10 @@ func makeWorkloadReport(spnName string, subNames map[string]string, assignments 
 }
 
 func TestWorkloadModelCompare_BasicMatch(t *testing.T) {
-	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+	golden := makeWorkloadReport("spn-platform-wkld-contoso",
 		map[string]string{
-			"aaa-1111": "azg-sub-axonius-hub-01",
-			"aaa-2222": "azg-sub-axonius-spoke-01",
+			"aaa-1111": "azg-sub-contoso-hub-01",
+			"aaa-2222": "azg-sub-contoso-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
@@ -665,10 +665,10 @@ func TestWorkloadModelCompare_BasicMatch(t *testing.T) {
 		},
 	)
 
-	target := makeWorkloadReport("spn-fedrampmod-wkld-zscaler",
+	target := makeWorkloadReport("spn-platform-wkld-litware",
 		map[string]string{
-			"bbb-1111": "azg-sub-zscaler-hub-01",
-			"bbb-2222": "azg-sub-zscaler-spoke-01",
+			"bbb-1111": "azg-sub-litware-hub-01",
+			"bbb-2222": "azg-sub-litware-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
@@ -694,10 +694,10 @@ func TestWorkloadModelCompare_BasicMatch(t *testing.T) {
 }
 
 func TestWorkloadModelCompare_Drift(t *testing.T) {
-	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+	golden := makeWorkloadReport("spn-platform-wkld-contoso",
 		map[string]string{
-			"aaa-1111": "azg-sub-axonius-hub-01",
-			"aaa-2222": "azg-sub-axonius-spoke-01",
+			"aaa-1111": "azg-sub-contoso-hub-01",
+			"aaa-2222": "azg-sub-contoso-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
@@ -706,10 +706,10 @@ func TestWorkloadModelCompare_Drift(t *testing.T) {
 		},
 	)
 
-	target := makeWorkloadReport("spn-fedrampmod-wkld-adh",
+	target := makeWorkloadReport("spn-platform-wkld-fabrikam",
 		map[string]string{
-			"bbb-1111": "azg-sub-adh-prod-01",
-			"bbb-2222": "azg-sub-adh-spoke-01",
+			"bbb-1111": "azg-sub-fabrikam-prod-01",
+			"bbb-2222": "azg-sub-fabrikam-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
@@ -742,10 +742,10 @@ func TestWorkloadModelCompare_Drift(t *testing.T) {
 }
 
 func TestWorkloadModelCompare_ExplicitWorkloadKey(t *testing.T) {
-	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+	golden := makeWorkloadReport("spn-platform-wkld-contoso",
 		map[string]string{
-			"aaa-1111": "azg-sub-axonius-hub-01",
-			"aaa-2222": "azg-sub-axonius-spoke-01",
+			"aaa-1111": "azg-sub-contoso-hub-01",
+			"aaa-2222": "azg-sub-contoso-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
@@ -753,10 +753,10 @@ func TestWorkloadModelCompare_ExplicitWorkloadKey(t *testing.T) {
 		},
 	)
 
-	target := makeWorkloadReport("spn-fedrampmod-wkld-zscaler",
+	target := makeWorkloadReport("spn-platform-wkld-litware",
 		map[string]string{
-			"bbb-1111": "azg-sub-zscaler-hub-01",
-			"bbb-2222": "azg-sub-zscaler-spoke-01",
+			"bbb-1111": "azg-sub-litware-hub-01",
+			"bbb-2222": "azg-sub-litware-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
@@ -764,11 +764,11 @@ func TestWorkloadModelCompare_ExplicitWorkloadKey(t *testing.T) {
 		},
 	)
 
-	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "axonius")
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "contoso")
 
 	// Explicit workload key should be stored in result.
-	if result.GoldenWorkload != "axonius" {
-		t.Errorf("expected GoldenWorkload=%q, got %q", "axonius", result.GoldenWorkload)
+	if result.GoldenWorkload != "contoso" {
+		t.Errorf("expected GoldenWorkload=%q, got %q", "contoso", result.GoldenWorkload)
 	}
 	if len(result.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(result.Results))
@@ -814,10 +814,10 @@ func TestWorkloadModelCompare_FallbackNoWorkload(t *testing.T) {
 }
 
 func TestWorkloadModelCompare_MultipleTargets(t *testing.T) {
-	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+	golden := makeWorkloadReport("spn-platform-wkld-contoso",
 		map[string]string{
-			"aaa-1111": "azg-sub-axonius-hub-01",
-			"aaa-2222": "azg-sub-axonius-spoke-01",
+			"aaa-1111": "azg-sub-contoso-hub-01",
+			"aaa-2222": "azg-sub-contoso-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
@@ -827,10 +827,10 @@ func TestWorkloadModelCompare_MultipleTargets(t *testing.T) {
 	)
 
 	// Target 1: 100% match (same structure, different workload name).
-	t1 := makeWorkloadReport("spn-fedrampmod-wkld-zscaler",
+	t1 := makeWorkloadReport("spn-platform-wkld-litware",
 		map[string]string{
-			"bbb-1111": "azg-sub-zscaler-hub-01",
-			"bbb-2222": "azg-sub-zscaler-spoke-01",
+			"bbb-1111": "azg-sub-litware-hub-01",
+			"bbb-2222": "azg-sub-litware-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
@@ -840,10 +840,10 @@ func TestWorkloadModelCompare_MultipleTargets(t *testing.T) {
 	)
 
 	// Target 2: partial match (hub vs prod suffix drift).
-	t2 := makeWorkloadReport("spn-fedrampmod-wkld-adh",
+	t2 := makeWorkloadReport("spn-platform-wkld-fabrikam",
 		map[string]string{
-			"ccc-1111": "azg-sub-adh-prod-01",
-			"ccc-2222": "azg-sub-adh-spoke-01",
+			"ccc-1111": "azg-sub-fabrikam-prod-01",
+			"ccc-2222": "azg-sub-fabrikam-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Reader", Scope: "/subscriptions/ccc-1111", ScopeType: "Subscription"},
@@ -852,10 +852,10 @@ func TestWorkloadModelCompare_MultipleTargets(t *testing.T) {
 	)
 
 	// Target 3: 0 matching RBAC (completely different roles).
-	t3 := makeWorkloadReport("spn-fedrampmod-wkld-crowdstrike",
+	t3 := makeWorkloadReport("spn-platform-wkld-northwind",
 		map[string]string{
-			"ddd-1111": "azg-sub-crowdstrike-hub-01",
-			"ddd-2222": "azg-sub-crowdstrike-spoke-01",
+			"ddd-1111": "azg-sub-northwind-hub-01",
+			"ddd-2222": "azg-sub-northwind-spoke-01",
 		},
 		[]rbac.RoleAssignment{
 			{RoleName: "Owner", Scope: "/subscriptions/ddd-1111", ScopeType: "Subscription"},
@@ -870,28 +870,28 @@ func TestWorkloadModelCompare_MultipleTargets(t *testing.T) {
 	}
 
 	// Results must be sorted by MatchPercent descending.
-	if result.Results[0].Target.DisplayName != "spn-fedrampmod-wkld-zscaler" {
-		t.Errorf("expected first=zscaler, got %s", result.Results[0].Target.DisplayName)
+	if result.Results[0].Target.DisplayName != "spn-platform-wkld-litware" {
+		t.Errorf("expected first=litware, got %s", result.Results[0].Target.DisplayName)
 	}
-	if result.Results[1].Target.DisplayName != "spn-fedrampmod-wkld-adh" {
-		t.Errorf("expected second=adh, got %s", result.Results[1].Target.DisplayName)
+	if result.Results[1].Target.DisplayName != "spn-platform-wkld-fabrikam" {
+		t.Errorf("expected second=fabrikam, got %s", result.Results[1].Target.DisplayName)
 	}
-	if result.Results[2].Target.DisplayName != "spn-fedrampmod-wkld-crowdstrike" {
-		t.Errorf("expected third=crowdstrike, got %s", result.Results[2].Target.DisplayName)
+	if result.Results[2].Target.DisplayName != "spn-platform-wkld-northwind" {
+		t.Errorf("expected third=northwind, got %s", result.Results[2].Target.DisplayName)
 	}
 
 	if !floatClose(result.Results[0].MatchPercent, 100.0) {
-		t.Errorf("expected zscaler MatchPercent≈100, got %.2f", result.Results[0].MatchPercent)
+		t.Errorf("expected litware MatchPercent≈100, got %.2f", result.Results[0].MatchPercent)
 	}
 
-	// adh: shared=1 (Contributor|spoke), max(3,2)=3 → 33.33%
+	// fabrikam: shared=1 (Contributor|spoke), max(3,2)=3 → 33.33%
 	wantPartialPct := float64(1) / float64(3) * 100.0
 	if !floatClose(result.Results[1].MatchPercent, wantPartialPct) {
-		t.Errorf("expected adh MatchPercent≈%.2f, got %.2f", wantPartialPct, result.Results[1].MatchPercent)
+		t.Errorf("expected fabrikam MatchPercent≈%.2f, got %.2f", wantPartialPct, result.Results[1].MatchPercent)
 	}
 
 	if !floatClose(result.Results[2].MatchPercent, 0.0) {
-		t.Errorf("expected crowdstrike MatchPercent≈0, got %.2f", result.Results[2].MatchPercent)
+		t.Errorf("expected northwind MatchPercent≈0, got %.2f", result.Results[2].MatchPercent)
 	}
 }
 
@@ -899,9 +899,9 @@ func TestWorkloadModelCompare_CommonScopes(t *testing.T) {
 	commonSubID := "ccc-3333"
 	commonSubName := "azg-sub-shared-services-01"
 
-	golden := makeWorkloadReport("spn-fedrampmod-wkld-axonius",
+	golden := makeWorkloadReport("spn-platform-wkld-contoso",
 		map[string]string{
-			"aaa-1111":  "azg-sub-axonius-hub-01",
+			"aaa-1111":  "azg-sub-contoso-hub-01",
 			commonSubID: commonSubName,
 		},
 		[]rbac.RoleAssignment{
@@ -910,9 +910,9 @@ func TestWorkloadModelCompare_CommonScopes(t *testing.T) {
 		},
 	)
 
-	target := makeWorkloadReport("spn-fedrampmod-wkld-zscaler",
+	target := makeWorkloadReport("spn-platform-wkld-litware",
 		map[string]string{
-			"bbb-1111":  "azg-sub-zscaler-hub-01",
+			"bbb-1111":  "azg-sub-litware-hub-01",
 			commonSubID: commonSubName,
 		},
 		[]rbac.RoleAssignment{

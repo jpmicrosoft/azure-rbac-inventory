@@ -198,7 +198,7 @@ RBAC assignments are compared by **RoleName + ScopeType** (e.g., `Contributor @ 
 
 ### Workload-Aware Comparison
 
-When SPNs follow a naming convention that embeds a workload identifier (e.g., `spn-fedrampmod-wkld-axonius`), the tool can perform **cross-workload** scope comparison. Instead of comparing raw scope IDs, scopes are normalized by replacing the workload token with `{workload}`, so assignments on different but structurally equivalent subscriptions are matched correctly.
+When SPNs follow a naming convention that embeds a workload identifier (e.g., `spn-platform-wkld-contoso`), the tool can perform **cross-workload** scope comparison. Instead of comparing raw scope IDs, scopes are normalized by replacing the workload token with `{workload}`, so assignments on different but structurally equivalent subscriptions are matched correctly.
 
 **How it works:**
 
@@ -210,31 +210,31 @@ When SPNs follow a naming convention that embeds a workload identifier (e.g., `s
 **How scope normalization works:**
 
 ```
-Golden: spn-fedrampmod-wkld-axonius → workload = "axonius"
-  Reader on azg-sub-axonius-hub-01     → Reader|azg-sub-{workload}-hub-01
-  Contributor on azg-sub-axonius-spoke-01 → Contributor|azg-sub-{workload}-spoke-01
+Golden: spn-platform-wkld-contoso → workload = "contoso"
+  Reader on azg-sub-contoso-hub-01     → Reader|azg-sub-{workload}-hub-01
+  Contributor on azg-sub-contoso-spoke-01 → Contributor|azg-sub-{workload}-spoke-01
 
-Target: spn-fedrampmod-wkld-zscaler → workload = "zscaler"
-  Reader on azg-sub-zscaler-hub-01     → Reader|azg-sub-{workload}-hub-01  ✓ MATCH
-  Contributor on azg-sub-zscaler-spoke-01 → Contributor|azg-sub-{workload}-spoke-01  ✓ MATCH
+Target: spn-platform-wkld-litware → workload = "litware"
+  Reader on azg-sub-litware-hub-01     → Reader|azg-sub-{workload}-hub-01  ✓ MATCH
+  Contributor on azg-sub-litware-spoke-01 → Contributor|azg-sub-{workload}-spoke-01  ✓ MATCH
 ```
 
 **Examples:**
 
 ```bash
 # Auto-detect workload names from SPN naming conventions
-azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius \
-  spn-fedrampmod-wkld-zscaler spn-fedrampmod-wkld-adh \
+azure-rbac-inventory compare --model spn-platform-wkld-contoso \
+  spn-platform-wkld-litware spn-platform-wkld-fabrikam \
   --cloud AzureUSGovernment
 
 # Explicit workload key for the golden SPN
-azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius \
-  --workload-key axonius \
+azure-rbac-inventory compare --model spn-platform-wkld-contoso \
+  --workload-key contoso \
   --file targets.csv --cloud AzureUSGovernment
 
 # Export workload comparison to HTML
-azure-rbac-inventory compare --model spn-fedrampmod-wkld-axonius \
-  spn-fedrampmod-wkld-zscaler --export workload-diff.html
+azure-rbac-inventory compare --model spn-platform-wkld-contoso \
+  spn-platform-wkld-litware --export workload-diff.html
 ```
 
 ### Compare Flags
