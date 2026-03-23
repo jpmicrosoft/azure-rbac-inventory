@@ -102,7 +102,7 @@ const compareHTMLTemplate = `<!DOCTYPE html>
         <h4>Only in {{$nameA}} ({{len .Result.RBAC.OnlyA}})</h4>
         <ul>
           {{range .Result.RBAC.OnlyA}}
-          <li><span class="diff-marker removed">✗</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span></li>
+          <li><span class="diff-marker removed">✗</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span> <span class="diff-scope mono" style="font-size: 0.8em;">{{.Scope}}</span></li>
           {{end}}
         </ul>
       </div>
@@ -112,7 +112,7 @@ const compareHTMLTemplate = `<!DOCTYPE html>
         <h4>Only in {{$nameB}} ({{len .Result.RBAC.OnlyB}})</h4>
         <ul>
           {{range .Result.RBAC.OnlyB}}
-          <li><span class="diff-marker added">✚</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span></li>
+          <li><span class="diff-marker added">✚</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span> <span class="diff-scope mono" style="font-size: 0.8em;">{{.Scope}}</span></li>
           {{end}}
         </ul>
       </div>
@@ -279,6 +279,24 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
     </div>
   </div>
 
+  {{if .Result.ModelRBAC}}
+  <details>
+    <summary>Model RBAC Assignments <span class="section-count">{{len .Result.ModelRBAC}}</span></summary>
+    <div class="section-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Role</th><th>Scope Type</th><th>Scope</th></tr></thead>
+        <tbody>
+          {{range .Result.ModelRBAC}}
+          <tr><td>{{.RoleName}}</td><td>{{.ScopeType}}</td><td class="mono" style="font-size: 0.8em;">{{.Scope}}</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+  {{end}}
+
   <div class="stats-bar">
     <div class="stat-card">
       <div class="stat-value">{{len .Result.Results}}</div>
@@ -360,7 +378,7 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
         <h4>Missing from {{$nameB}} ({{len .Comparison.RBAC.OnlyA}})</h4>
         <ul>
           {{range .Comparison.RBAC.OnlyA}}
-          <li><span class="diff-marker removed">✗</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span></li>
+          <li><span class="diff-marker removed">✗</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span> <span class="diff-scope mono" style="font-size: 0.8em;">{{.Scope}}</span></li>
           {{end}}
         </ul>
       </div>
@@ -370,7 +388,7 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
         <h4>Extra in {{$nameB}} ({{len .Comparison.RBAC.OnlyB}})</h4>
         <ul>
           {{range .Comparison.RBAC.OnlyB}}
-          <li><span class="diff-marker added">✚</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span></li>
+          <li><span class="diff-marker added">✚</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span> <span class="diff-scope mono" style="font-size: 0.8em;">{{.Scope}}</span></li>
           {{end}}
         </ul>
       </div>
