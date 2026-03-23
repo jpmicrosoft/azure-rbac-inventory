@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jpmicrosoft/azure-rbac-inventory)](https://goreportcard.com/report/github.com/jpmicrosoft/azure-rbac-inventory)
 
-A single-binary CLI toolthat reports **all RBAC assignments, Entra ID directory roles, access package assignments, and group memberships** for any Azure identity.
+A single-binary CLI tool that reports **all RBAC assignments, Entra ID directory roles, access package assignments, and group memberships** for any Azure identity — and can **compare** assignments between identities to detect drift.
 
 Supports **Azure Commercial** and **Azure Government** clouds.
 
@@ -18,6 +18,7 @@ Supports **Azure Commercial** and **Azure Government** clouds.
 - **Access Package Requests** — Shows pending, approved, and denied access package requests (with `--include-access-packages`)
 - **Group Memberships** — Lists direct and transitive group memberships
 - **Inherited RBAC** — Optionally queries RBAC assignments inherited through group memberships (`--include-group-rbac`). Note: group memberships are always listed in the report; this flag adds the additional RBAC lookups per group.
+- **Compare** — Compare RBAC, directory roles, groups, and access packages between two identities (1:1) or one baseline vs. many targets (1:N model compare) with match% and drift detection
 - **Pattern Search** — Search by display name, SPN name, or wildcard pattern instead of requiring an exact ID
 - **File Input** — Batch-check multiple identities from a text file
 - **Export Formats** — Export results to CSV, HTML, Markdown, XLSX, or JSON files
@@ -82,6 +83,12 @@ The identity running this tool needs these permissions at minimum:
 
 # Use device-code auth for SSH/headless environments
 ./azure-rbac-inventory check <object-id> --auth device-code
+
+# Compare two identities side-by-side
+./azure-rbac-inventory compare <id-A> <id-B>
+
+# Model compare: one baseline vs. multiple targets
+./azure-rbac-inventory compare --model <model-id> <target-1> <target-2>
 ```
 
 ## Usage
@@ -114,6 +121,90 @@ azure-rbac-inventory --version
 
 > **Note:** The `--cloud` flag value is **case-insensitive**. The following are all valid:
 > `AzureCloud`, `azurecloud`, `AZURECLOUD`, `AzureUSGovernment`, `azureusgovernment`, `AzureChinaCloud`.
+
+## Compare
+
+Compare RBAC assignments, Entra ID directory roles, group memberships, and access packages between identities. Two modes are available:
+
+### 1:1 Compare
+
+Compare two identities side-by-side:
+
+```bash
+azure-rbac-inventory compare <id-A> <id-B>
+```
+
+The output shows four sections (RBAC, Directory Roles, Groups, Access Packages), each with three columns: items unique to identity A, items shared, and items unique to identity B.
+
+```bash
+# Compare two SPNs
+azure-rbac-inventory compare aaaaaaaa-1111-2222-3333-444444444444 bbbbbbbb-5555-6666-7777-888888888888
+
+# Compare by display name
+azure-rbac-inventory compare "spn-prod-app" "spn-staging-app"
+
+# Compare in Azure Government
+azure-rbac-inventory compare <id-A> <id-B> --cloud AzureUSGovernment
+
+# Export comparison to HTML with visual diff
+azure-rbac-inventory compare <id-A> <id-B> --export diff.html
+
+# Export comparison to JSON
+azure-rbac-inventory compare <id-A> <id-B> --export diff.json
+```
+
+### Model Compare (1:N)
+
+Use `--model` to designate one identity as the baseline and compare multiple targets against it. Each target is compared independently to the model, showing match percentage and drift:
+
+```bash
+azure-rbac-inventory compare --model <model-id> <target-1> <target-2> <target-3>
+```
+
+```bash
+# Compare a golden SPN against several targets
+azure-rbac-inventory compare --model "spn-golden-config" "spn-team-a" "spn-team-b" "spn-team-c"
+
+# Load targets from a file
+azure-rbac-inventory compare --model <model-id> --file targets.csv
+
+# Load targets from JSON
+azure-rbac-inventory compare --model <model-id> --file targets.json
+
+# Export model compare results to HTML
+azure-rbac-inventory compare --model <model-id> --file targets.csv --export drift-report.html
+
+# Azure Government with specific subscriptions
+azure-rbac-inventory compare --model <model-id> --file targets.txt \
+  --cloud AzureUSGovernment --subscriptions "sub-1,sub-2"
+```
+
+The `--file` flag accepts the same formats as `check` (CSV, JSON, plain text). See [File Input Formats](#file-input-formats) for details.
+
+### Match Percentage
+
+Match% is calculated per section (RBAC, Directory Roles, Groups, Access Packages):
+
+```
+match% = shared items / max(total_A, total_B) × 100
+```
+
+- **100%** — The two identities have identical assignments in that section
+- **0%** — No overlap at all
+
+### RBAC Comparison Keys
+
+RBAC assignments are compared by **RoleName + ScopeType** (e.g., `Contributor @ Subscription`). Specific scope IDs (subscription GUIDs, resource group names) are ignored during comparison because identities in different environments typically operate on different subscriptions. This means two identities both having `Contributor` at the subscription level are considered a match, even if the subscription IDs differ.
+
+### Compare Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--model` | Baseline identity for 1:N model compare | — |
+| `--file` | Load target identities from file (CSV, JSON, or text) | — |
+| `--export` | Export comparison to file (`.html` or `.json`) | — |
+
+All global flags (`--cloud`, `--tenant`, `--auth`, `--subscriptions`, `--timeout`, `--verbose`, etc.) also apply to `compare`.
 
 ## Pattern Search
 
@@ -571,6 +662,15 @@ Yes. Use `--subscriptions` to check only specific subscriptions:
 ```bash
 azure-rbac-inventory check <id> --subscriptions "sub-id-1,sub-id-2"
 ```
+
+**Q: How does `compare` differ from running `check` on two identities?**
+`check` produces independent reports per identity. `compare` aligns results side-by-side, highlights shared vs. unique assignments, and calculates match percentages. The `--model` flag extends this to 1:N comparisons with drift detection.
+
+**Q: Why does compare ignore specific scope IDs for RBAC?**
+Identities in different environments (dev vs. prod) typically operate on different subscriptions. Comparing by `RoleName + ScopeType` (e.g., `Contributor @ Subscription`) captures whether the same *kind* of access is granted, without false negatives from differing subscription GUIDs.
+
+**Q: Can I compare identities across clouds?**
+No. Both identities must be in the same tenant and cloud. The comparison queries run against a single set of ARM/Graph endpoints.
 
 ## Notes & Limitations
 
