@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-03-23
+
+### Added
+- Search bar in HTML model compare report to filter target summary table
+- Clickable target names in HTML summary linking to drift detail sections
+
+### Fixed
+- **Structural RBAC matching in model compare** — same role at the same scope level (e.g. Reader at any Subscription) is now treated as a match regardless of exact scope path, preventing false "Missing + Extra" pairs
+- Application registrations blocked from model compare (model = hard error, targets = skip with warning) since apps don't have RBAC assignments
+
 ## [0.4.0] - 2026-03-23
 
 ### Added
