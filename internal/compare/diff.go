@@ -19,14 +19,22 @@ const (
 	CategoryAccessPackages DiffCategory = "AccessPackages"
 )
 
+// InferredMatch pairs a model (A) role assignment with the target (B) role
+// assignment that was matched structurally (RoleName+ScopeType) when scope
+// normalization could not verify the exact scope path.
+type InferredMatch struct {
+	Model  rbac.RoleAssignment `json:"model"`
+	Target rbac.RoleAssignment `json:"target"`
+}
+
 // RBACDiff holds RBAC role assignments split into only-A, only-B, shared.
-// Inferred contains items matched by RoleName+ScopeType fallback (pass 2)
+// Inferred contains paired items matched by RoleName+ScopeType fallback (pass 2)
 // when workload-based scope normalization could not resolve the exact scope.
 type RBACDiff struct {
 	OnlyA    []rbac.RoleAssignment `json:"onlyA"`
 	OnlyB    []rbac.RoleAssignment `json:"onlyB"`
 	Shared   []rbac.RoleAssignment `json:"shared"`
-	Inferred []rbac.RoleAssignment `json:"inferred,omitempty"`
+	Inferred []InferredMatch       `json:"inferred,omitempty"`
 }
 
 // RoleDiff holds directory roles split into only-A, only-B, shared.
@@ -430,7 +438,10 @@ func diffRBACWorkload(aList, bList []rbac.RoleAssignment, keyFnA, keyFnB func(rb
 				shared = be.count
 			}
 			for i := 0; i < shared; i++ {
-				diff.Inferred = append(diff.Inferred, ae.items[i])
+				diff.Inferred = append(diff.Inferred, InferredMatch{
+					Model:  ae.items[i],
+					Target: be.items[i],
+				})
 			}
 			for i := shared; i < ae.count; i++ {
 				diff.OnlyA = append(diff.OnlyA, ae.items[i])
@@ -595,8 +606,22 @@ func ModelCompare(model *reportpkg.Report, targets []*reportpkg.Report) *ModelCo
 			modelRBACKey, modelRBACKey,
 		)
 		// ModelCompare uses RoleName+ScopeType keys — all matches are structural
-		// (inferred), not exact scope matches. Move Shared → Inferred.
-		rbacDiff.Inferred = append(rbacDiff.Inferred, rbacDiff.Shared...)
+		// (inferred), not exact scope matches. Pair Shared items with their
+		// corresponding target assignments and move to Inferred.
+		targetByKey := make(map[string][]rbac.RoleAssignment)
+		for _, a := range target.RBACAssignments {
+			k := modelRBACKey(a)
+			targetByKey[k] = append(targetByKey[k], a)
+		}
+		for _, a := range rbacDiff.Shared {
+			k := modelRBACKey(a)
+			if tItems := targetByKey[k]; len(tItems) > 0 {
+				rbacDiff.Inferred = append(rbacDiff.Inferred, InferredMatch{Model: a, Target: tItems[0]})
+				targetByKey[k] = tItems[1:]
+			} else {
+				rbacDiff.Inferred = append(rbacDiff.Inferred, InferredMatch{Model: a, Target: a})
+			}
+		}
 		rbacDiff.Shared = nil
 		roleDiff := diffRoles(model.DirectoryRoles, target.DirectoryRoles)
 		groupDiff := diffGroups(model.GroupMemberships, target.GroupMemberships)

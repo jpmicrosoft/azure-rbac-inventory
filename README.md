@@ -196,6 +196,22 @@ match% = shared items / max(total_A, total_B) × 100
 
 RBAC assignments are compared by **RoleName + ScopeType** (e.g., `Contributor @ Subscription`). Specific scope IDs (subscription GUIDs, resource group names) are ignored during comparison because identities in different environments typically operate on different subscriptions. This means two identities both having `Contributor` at the subscription level are considered a match, even if the subscription IDs differ.
 
+### Inferred Matches
+
+When scope normalization cannot match an assignment precisely (e.g., the workload name doesn't appear in a subscription display name), the tool falls back to matching by **RoleName + ScopeType** only. These structural matches are reported as **Inferred Matches** (amber `≈` marker) — distinct from exact Shared matches.
+
+Inferred matches display **both** the model and target scope paths, with differing path segments highlighted so you can visually verify the inference:
+
+**Terminal output:**
+```
+  Inferred Matches (2):
+    ≈ Contributor (Subscription)
+        Model:  /subscriptions/[937bd4ae-...]/[sub-monitoring-prod-01]
+        Target: /subscriptions/[a5ad4293-...]/[sub-contoso-hub-01]
+```
+
+**HTML output:** Differing segments are highlighted in amber.
+
 ### Workload-Aware Comparison
 
 When SPNs follow a naming convention that embeds a workload identifier (e.g., `spn-platform-wkld-contoso`), the tool can perform **cross-workload** scope comparison. Instead of comparing raw scope IDs, scopes are normalized by replacing the workload token with `{workload}`, so assignments on different but structurally equivalent subscriptions are matched correctly.
