@@ -20,10 +20,13 @@ const (
 )
 
 // RBACDiff holds RBAC role assignments split into only-A, only-B, shared.
+// Inferred contains items matched by RoleName+ScopeType fallback (pass 2)
+// when workload-based scope normalization could not resolve the exact scope.
 type RBACDiff struct {
-	OnlyA  []rbac.RoleAssignment
-	OnlyB  []rbac.RoleAssignment
-	Shared []rbac.RoleAssignment
+	OnlyA    []rbac.RoleAssignment `json:"onlyA"`
+	OnlyB    []rbac.RoleAssignment `json:"onlyB"`
+	Shared   []rbac.RoleAssignment `json:"shared"`
+	Inferred []rbac.RoleAssignment `json:"inferred,omitempty"`
 }
 
 // RoleDiff holds directory roles split into only-A, only-B, shared.
@@ -137,7 +140,7 @@ func CompareReports(a, b *reportpkg.Report) *ComparisonResult {
 	result.AccessPackages = diffPackages(a.AccessPackages, b.AccessPackages)
 
 	// --- Match percentage ---
-	sharedTotal := len(result.RBAC.Shared) + len(result.DirectoryRoles.Shared) +
+	sharedTotal := len(result.RBAC.Shared) + len(result.RBAC.Inferred) + len(result.DirectoryRoles.Shared) +
 		len(result.Groups.Shared) + len(result.AccessPackages.Shared)
 
 	totalA := len(a.RBACAssignments) + len(a.DirectoryRoles) +
@@ -325,11 +328,20 @@ func subNameValues(m map[string]string) []string {
 
 // diffRBACWorkload compares RBAC assignments using custom key functions for
 // each side, enabling workload-normalized comparisons.
+//
+// It uses two-pass matching:
+//   - Pass 1 matches by the workload-normalized scope key (keyFnA / keyFnB).
+//   - Pass 2 re-tries unmatched items using a RoleName+ScopeType fallback
+//     (modelRBACKey) so that assignments whose scope couldn't be normalized
+//     (e.g. workload name absent from subscription name) are still recognized
+//     as structural matches.
 func diffRBACWorkload(aList, bList []rbac.RoleAssignment, keyFnA, keyFnB func(rbac.RoleAssignment) string) RBACDiff {
 	type entry struct {
 		items []rbac.RoleAssignment
 		count int
 	}
+
+	// --- Pass 1: match by normalized scope key ---
 
 	aKeys := make(map[string]*entry)
 	for _, item := range aList {
@@ -354,6 +366,7 @@ func diffRBACWorkload(aList, bList []rbac.RoleAssignment, keyFnA, keyFnB func(rb
 	}
 
 	var diff RBACDiff
+	var unmatchedA, unmatchedB []rbac.RoleAssignment
 
 	for k, ae := range aKeys {
 		if be, ok := bKeys[k]; ok {
@@ -365,6 +378,61 @@ func diffRBACWorkload(aList, bList []rbac.RoleAssignment, keyFnA, keyFnB func(rb
 				diff.Shared = append(diff.Shared, ae.items[i])
 			}
 			for i := shared; i < ae.count; i++ {
+				unmatchedA = append(unmatchedA, ae.items[i])
+			}
+		} else {
+			unmatchedA = append(unmatchedA, ae.items...)
+		}
+	}
+
+	for k, be := range bKeys {
+		if ae, ok := aKeys[k]; ok {
+			shared := ae.count
+			if be.count < shared {
+				shared = be.count
+			}
+			for i := shared; i < be.count; i++ {
+				unmatchedB = append(unmatchedB, be.items[i])
+			}
+		} else {
+			unmatchedB = append(unmatchedB, be.items...)
+		}
+	}
+
+	// --- Pass 2: fallback match unmatched items by RoleName + ScopeType ---
+
+	uaKeys := make(map[string]*entry)
+	for _, item := range unmatchedA {
+		k := modelRBACKey(item)
+		if e, ok := uaKeys[k]; ok {
+			e.items = append(e.items, item)
+			e.count++
+		} else {
+			uaKeys[k] = &entry{items: []rbac.RoleAssignment{item}, count: 1}
+		}
+	}
+
+	ubKeys := make(map[string]*entry)
+	for _, item := range unmatchedB {
+		k := modelRBACKey(item)
+		if e, ok := ubKeys[k]; ok {
+			e.items = append(e.items, item)
+			e.count++
+		} else {
+			ubKeys[k] = &entry{items: []rbac.RoleAssignment{item}, count: 1}
+		}
+	}
+
+	for k, ae := range uaKeys {
+		if be, ok := ubKeys[k]; ok {
+			shared := ae.count
+			if be.count < shared {
+				shared = be.count
+			}
+			for i := 0; i < shared; i++ {
+				diff.Inferred = append(diff.Inferred, ae.items[i])
+			}
+			for i := shared; i < ae.count; i++ {
 				diff.OnlyA = append(diff.OnlyA, ae.items[i])
 			}
 		} else {
@@ -372,8 +440,8 @@ func diffRBACWorkload(aList, bList []rbac.RoleAssignment, keyFnA, keyFnB func(rb
 		}
 	}
 
-	for k, be := range bKeys {
-		if ae, ok := aKeys[k]; ok {
+	for k, be := range ubKeys {
+		if ae, ok := uaKeys[k]; ok {
 			shared := ae.count
 			if be.count < shared {
 				shared = be.count
@@ -457,7 +525,7 @@ func WorkloadModelCompare(model *reportpkg.Report, targets []*reportpkg.Report, 
 		}
 
 		// Compute match percentage.
-		sharedTotal := len(rbacDiff.Shared) + len(roleDiff.Shared) +
+		sharedTotal := len(rbacDiff.Shared) + len(rbacDiff.Inferred) + len(roleDiff.Shared) +
 			len(groupDiff.Shared) + len(pkgDiff.Shared)
 
 		totalA := len(model.RBACAssignments) + len(model.DirectoryRoles) +
@@ -526,11 +594,15 @@ func ModelCompare(model *reportpkg.Report, targets []*reportpkg.Report) *ModelCo
 			model.RBACAssignments, target.RBACAssignments,
 			modelRBACKey, modelRBACKey,
 		)
+		// ModelCompare uses RoleName+ScopeType keys — all matches are structural
+		// (inferred), not exact scope matches. Move Shared → Inferred.
+		rbacDiff.Inferred = append(rbacDiff.Inferred, rbacDiff.Shared...)
+		rbacDiff.Shared = nil
 		roleDiff := diffRoles(model.DirectoryRoles, target.DirectoryRoles)
 		groupDiff := diffGroups(model.GroupMemberships, target.GroupMemberships)
 		pkgDiff := diffPackages(model.AccessPackages, target.AccessPackages)
 
-		sharedTotal := len(rbacDiff.Shared) + len(roleDiff.Shared) +
+		sharedTotal := len(rbacDiff.Shared) + len(rbacDiff.Inferred) + len(roleDiff.Shared) +
 			len(groupDiff.Shared) + len(pkgDiff.Shared)
 		totalA := len(model.RBACAssignments) + len(model.DirectoryRoles) +
 			len(model.GroupMemberships) + len(model.AccessPackages)
