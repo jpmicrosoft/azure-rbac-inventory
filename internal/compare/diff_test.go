@@ -986,3 +986,168 @@ func TestWorkloadModelCompare_CommonScopes(t *testing.T) {
 		t.Errorf("expected ExtraRBAC=0, got %d", r.ExtraRBAC)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Two-pass RBAC diff tests (normalized + ScopeType fallback)
+// ---------------------------------------------------------------------------
+
+// TestWorkloadModelCompare_NoWorkloadInSubName is the primary bug-fix test.
+// Subscription names do NOT contain the workload token, so pass-1 normalization
+// cannot help. Pass-2 must fall back to RoleName+ScopeType matching.
+func TestWorkloadModelCompare_NoWorkloadInSubName(t *testing.T) {
+	golden := makeWorkloadReport("spn-platform-wkld-monitoring",
+		map[string]string{"aaa-1111": "azg-sub-infra-hub-01"},
+		[]rbac.RoleAssignment{
+			{RoleName: "Contributor", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+			{RoleName: "Key Vault Administrator", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+			{RoleName: "Storage Blob Data Contributor", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+		},
+	)
+
+	target := makeWorkloadReport("spn-platform-wkld-monitoring-target",
+		map[string]string{"bbb-2222": "azg-sub-ops-hub-01"},
+		[]rbac.RoleAssignment{
+			{RoleName: "Contributor", Scope: "/subscriptions/bbb-2222", ScopeType: "Subscription"},
+			{RoleName: "Key Vault Administrator", Scope: "/subscriptions/bbb-2222", ScopeType: "Subscription"},
+			{RoleName: "Storage Blob Data Contributor", Scope: "/subscriptions/bbb-2222", ScopeType: "Subscription"},
+			{RoleName: "Resource Policy Contributor", Scope: "/providers/Microsoft.Management/managementGroups/root-mg", ScopeType: "Management Group"},
+		},
+	)
+
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "", nil)
+
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
+	}
+	r := result.Results[0]
+	rbacDiff := r.Comparison.RBAC
+
+	// 3 roles matched via ScopeType fallback (pass 2) → Inferred.
+	assertLen(t, "RBAC.Shared", rbacDiff.Shared, 0)
+	assertLen(t, "RBAC.Inferred", rbacDiff.Inferred, 3)
+	// All golden roles are accounted for.
+	assertLen(t, "RBAC.OnlyA", rbacDiff.OnlyA, 0)
+	// Resource Policy Contributor is extra in target.
+	assertLen(t, "RBAC.OnlyB", rbacDiff.OnlyB, 1)
+
+	if r.MissingRBAC != 0 {
+		t.Errorf("expected MissingRBAC=0, got %d", r.MissingRBAC)
+	}
+	if r.ExtraRBAC != 1 {
+		t.Errorf("expected ExtraRBAC=1, got %d", r.ExtraRBAC)
+	}
+
+	// shared=3, max(golden=3, target=4)=4 → 3/4 = 75%
+	wantPct := float64(3) / float64(4) * 100.0
+	if !floatClose(r.MatchPercent, wantPct) {
+		t.Errorf("expected MatchPercent≈%.2f, got %.2f", wantPct, r.MatchPercent)
+	}
+}
+
+// TestWorkloadModelCompare_MixedNormalizedAndFallback verifies that pass 1
+// (workload-normalized scope keys) and pass 2 (ScopeType fallback) cooperate.
+// Some subs contain the workload name (normalization works), others do not.
+func TestWorkloadModelCompare_MixedNormalizedAndFallback(t *testing.T) {
+	golden := makeWorkloadReport("spn-platform-wkld-contoso",
+		map[string]string{
+			"aaa-1111": "azg-sub-contoso-hub-01",  // workload in name → normalizes
+			"shared-1": "azg-sub-platform-core-01", // no workload → fallback
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/shared-1", ScopeType: "Subscription"},
+		},
+	)
+
+	target := makeWorkloadReport("spn-platform-wkld-litware",
+		map[string]string{
+			"bbb-1111": "azg-sub-litware-hub-01", // workload in name → normalizes
+			"shared-2": "azg-sub-network-core-01", // no workload → fallback
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Reader", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/shared-2", ScopeType: "Subscription"},
+		},
+	)
+
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "", nil)
+
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
+	}
+	r := result.Results[0]
+	rbacDiff := r.Comparison.RBAC
+
+	// Reader matched by normalization (pass 1) → Shared, Contributor by ScopeType fallback (pass 2) → Inferred.
+	assertLen(t, "RBAC.Shared", rbacDiff.Shared, 1)
+	assertLen(t, "RBAC.Inferred", rbacDiff.Inferred, 1)
+	assertLen(t, "RBAC.OnlyA", rbacDiff.OnlyA, 0)
+	assertLen(t, "RBAC.OnlyB", rbacDiff.OnlyB, 0)
+
+	if !floatClose(r.MatchPercent, 100.0) {
+		t.Errorf("expected MatchPercent≈100, got %.2f", r.MatchPercent)
+	}
+	if r.MissingRBAC != 0 {
+		t.Errorf("expected MissingRBAC=0, got %d", r.MissingRBAC)
+	}
+	if r.ExtraRBAC != 0 {
+		t.Errorf("expected ExtraRBAC=0, got %d", r.ExtraRBAC)
+	}
+}
+
+// TestWorkloadModelCompare_DuplicateRolesWithFallback tests counting when the
+// same role appears on multiple subs that cannot be normalized.
+// Golden: Contributor on 2 subs, Target: Contributor on 3 subs.
+// Expected: min(2,3)=2 shared, 0 onlyA, 1 onlyB.
+func TestWorkloadModelCompare_DuplicateRolesWithFallback(t *testing.T) {
+	golden := makeWorkloadReport("spn-platform-wkld-monitoring",
+		map[string]string{
+			"aaa-1111": "azg-sub-infra-hub-01",
+			"aaa-2222": "azg-sub-shared-hub-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Contributor", Scope: "/subscriptions/aaa-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/aaa-2222", ScopeType: "Subscription"},
+		},
+	)
+
+	target := makeWorkloadReport("spn-platform-wkld-monitoring-target",
+		map[string]string{
+			"bbb-1111": "azg-sub-ops-hub-01",
+			"bbb-2222": "azg-sub-network-hub-01",
+			"bbb-3333": "azg-sub-security-hub-01",
+		},
+		[]rbac.RoleAssignment{
+			{RoleName: "Contributor", Scope: "/subscriptions/bbb-1111", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/bbb-2222", ScopeType: "Subscription"},
+			{RoleName: "Contributor", Scope: "/subscriptions/bbb-3333", ScopeType: "Subscription"},
+		},
+	)
+
+	result := WorkloadModelCompare(golden, []*reportpkg.Report{target}, "", nil)
+
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
+	}
+	r := result.Results[0]
+	rbacDiff := r.Comparison.RBAC
+
+	// min(2,3) = 2 matched by ScopeType fallback → Inferred.
+	assertLen(t, "RBAC.Shared", rbacDiff.Shared, 0)
+	assertLen(t, "RBAC.Inferred", rbacDiff.Inferred, 2)
+	assertLen(t, "RBAC.OnlyA", rbacDiff.OnlyA, 0)
+	assertLen(t, "RBAC.OnlyB", rbacDiff.OnlyB, 1)
+
+	if r.MissingRBAC != 0 {
+		t.Errorf("expected MissingRBAC=0, got %d", r.MissingRBAC)
+	}
+	if r.ExtraRBAC != 1 {
+		t.Errorf("expected ExtraRBAC=1, got %d", r.ExtraRBAC)
+	}
+
+	// shared=2, max(golden=2, target=3)=3 → 2/3 ≈ 66.67%
+	wantPct := float64(2) / float64(3) * 100.0
+	if !floatClose(r.MatchPercent, wantPct) {
+		t.Errorf("expected MatchPercent≈%.2f, got %.2f", wantPct, r.MatchPercent)
+	}
+}

@@ -25,6 +25,7 @@ const compareCSS = `
   .diff-removed { background: #fff5f5; border-left: 4px solid #dc3545; }
   .diff-added { background: #f0fff0; border-left: 4px solid #28a745; }
   .diff-shared { background: #f8f9fa; border-left: 4px solid #6c757d; }
+  .diff-inferred { background: #fffbf0; border-left: 4px solid #f0ad4e; }
   .diff-section h4 { margin-bottom: 8px; font-size: 0.95em; }
   .diff-section ul { list-style: none; padding: 0; margin: 0; }
   .diff-section li { padding: 3px 0; font-size: 0.9em; }
@@ -32,6 +33,7 @@ const compareCSS = `
   .diff-marker.removed { color: #dc3545; }
   .diff-marker.added { color: #28a745; }
   .diff-marker.shared { color: #6c757d; }
+  .diff-marker.inferred { color: #f0ad4e; }
   .diff-scope { color: var(--text-light); font-size: 0.85em; }
   .match-bar { height: 8px; border-radius: 4px; background: #e9ecef; overflow: hidden; margin: 8px 0; }
   .match-fill { height: 100%; border-radius: 4px; background: var(--primary); }
@@ -68,6 +70,12 @@ const compareHTMLTemplate = `<!DOCTYPE html>
       <div class="stat-value">{{len .Result.RBAC.Shared | add (len .Result.DirectoryRoles.Shared) | add (len .Result.Groups.Shared) | add (len .Result.AccessPackages.Shared)}}</div>
       <div class="stat-label">Shared</div>
     </div>
+    {{if .Result.RBAC.Inferred}}
+    <div class="stat-card">
+      <div class="stat-value" style="color: #f0ad4e;">{{len .Result.RBAC.Inferred}}</div>
+      <div class="stat-label">Inferred</div>
+    </div>
+    {{end}}
   </div>
 
   <div style="display: flex; gap: 20px; margin-bottom: 20px;">
@@ -92,7 +100,7 @@ const compareHTMLTemplate = `<!DOCTYPE html>
   {{$nameA := .Result.IdentityA.DisplayName}}
   {{$nameB := .Result.IdentityB.DisplayName}}
 
-  {{$rbacTotal := len .Result.RBAC.OnlyA | add (len .Result.RBAC.OnlyB) | add (len .Result.RBAC.Shared)}}
+  {{$rbacTotal := len .Result.RBAC.OnlyA | add (len .Result.RBAC.OnlyB) | add (len .Result.RBAC.Shared) | add (len .Result.RBAC.Inferred)}}
   {{if gt $rbacTotal 0}}
   <details open>
     <summary>RBAC Differences <span class="section-count">{{$rbacTotal}}</span></summary>
@@ -123,6 +131,17 @@ const compareHTMLTemplate = `<!DOCTYPE html>
         <ul>
           {{range .Result.RBAC.Shared}}
           <li><span class="diff-marker shared">✓</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span></li>
+          {{end}}
+        </ul>
+      </div>
+      {{end}}
+      {{if .Result.RBAC.Inferred}}
+      <div class="diff-section diff-inferred">
+        <h4>Inferred Matches ({{len .Result.RBAC.Inferred}})</h4>
+        <p style="font-size: 0.85em; color: #856404; margin: 0 0 8px 0;">Matched by role name and scope type — exact scope could not be verified</p>
+        <ul>
+          {{range .Result.RBAC.Inferred}}
+          <li><span class="diff-marker inferred">≈</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span></li>
           {{end}}
         </ul>
       </div>
@@ -393,6 +412,19 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
         </ul>
       </div>
       {{end}}
+      {{end}}
+
+      {{if .Comparison.RBAC.Inferred}}
+      <h3 style="margin-bottom: 12px; font-size: 1em; color: #f0ad4e;">Inferred Matches</h3>
+      <div class="diff-section diff-inferred">
+        <h4>Matched by role name and scope type ({{len .Comparison.RBAC.Inferred}})</h4>
+        <p style="font-size: 0.85em; color: #856404; margin: 0 0 8px 0;">Exact scope could not be verified — matched structurally</p>
+        <ul>
+          {{range .Comparison.RBAC.Inferred}}
+          <li><span class="diff-marker inferred">≈</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span></li>
+          {{end}}
+        </ul>
+      </div>
       {{end}}
 
       {{$rolesTotal := len .Comparison.DirectoryRoles.OnlyA | add (len .Comparison.DirectoryRoles.OnlyB)}}

@@ -57,7 +57,7 @@ func printRBACDiff(result *compare.ComparisonResult) {
 	fmt.Println("  [RBAC] Role Assignment Differences")
 	fmt.Println("  " + strings.Repeat("-", 54))
 
-	if len(diff.OnlyA) == 0 && len(diff.OnlyB) == 0 && len(diff.Shared) == 0 {
+	if len(diff.OnlyA) == 0 && len(diff.OnlyB) == 0 && len(diff.Shared) == 0 && len(diff.Inferred) == 0 {
 		fmt.Println("    No assignments found.")
 		fmt.Println()
 		return
@@ -66,6 +66,9 @@ func printRBACDiff(result *compare.ComparisonResult) {
 	if len(diff.OnlyA) == 0 && len(diff.OnlyB) == 0 {
 		fmt.Printf("    No differences found.\n")
 		fmt.Printf("    Shared (%d)\n", len(diff.Shared))
+		if len(diff.Inferred) > 0 {
+			fmt.Printf("    Inferred Matches (%d)\n", len(diff.Inferred))
+		}
 		fmt.Println()
 		return
 	}
@@ -119,6 +122,32 @@ func printRBACDiff(result *compare.ComparisonResult) {
 		}
 	}
 	fmt.Println()
+
+	// Inferred Matches – matched by RoleName+ScopeType when scope normalization failed
+	if len(diff.Inferred) > 0 {
+		fmt.Printf("    Inferred Matches (%d):\n", len(diff.Inferred))
+		type sharedEntry struct {
+			label string
+			count int
+		}
+		seen := map[string]*sharedEntry{}
+		order := []string{}
+		for _, a := range diff.Inferred {
+			lbl := rbacLabel(a)
+			if e, ok := seen[lbl]; ok {
+				e.count++
+			} else {
+				seen[lbl] = &sharedEntry{label: lbl, count: 1}
+				order = append(order, lbl)
+			}
+		}
+		sort.Strings(order)
+		for _, lbl := range order {
+			e := seen[lbl]
+			fmt.Printf("      ≈ %s\n", rbacSharedLabel(e.label, e.count))
+		}
+		fmt.Println()
+	}
 }
 
 func printRoleDiff(result *compare.ComparisonResult) {
