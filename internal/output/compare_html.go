@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"strings"
 	"time"
 
 	"github.com/jpmicrosoft/azure-rbac-inventory/internal/compare"
@@ -35,6 +36,8 @@ const compareCSS = `
   .diff-marker.shared { color: #6c757d; }
   .diff-marker.inferred { color: #f0ad4e; }
   .diff-scope { color: var(--text-light); font-size: 0.85em; }
+  .inferred-pair { margin-left: 24px; font-size: 0.82em; color: var(--text-light); font-family: monospace; }
+  .inferred-pair mark { background: #fff3cd; padding: 1px 3px; border-radius: 3px; color: #856404; }
   .match-bar { height: 8px; border-radius: 4px; background: #e9ecef; overflow: hidden; margin: 8px 0; }
   .match-fill { height: 100%; border-radius: 4px; background: var(--primary); }
 </style>`
@@ -141,7 +144,11 @@ const compareHTMLTemplate = `<!DOCTYPE html>
         <p style="font-size: 0.85em; color: #856404; margin: 0 0 8px 0;">Matched by role name and scope type — exact scope could not be verified</p>
         <ul>
           {{range .Result.RBAC.Inferred}}
-          <li><span class="diff-marker inferred">≈</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span></li>
+          <li>
+            <span class="diff-marker inferred">≈</span> {{.Model.RoleName}} <span class="diff-scope">({{.Model.ScopeType}})</span>
+            <div class="inferred-pair">Model:&nbsp; {{highlightScope .Model.Scope .Target.Scope "model"}}</div>
+            <div class="inferred-pair">Target: {{highlightScope .Model.Scope .Target.Scope "target"}}</div>
+          </li>
           {{end}}
         </ul>
       </div>
@@ -421,13 +428,17 @@ const modelCompareHTMLTemplate = `<!DOCTYPE html>
         <p style="font-size: 0.85em; color: #856404; margin: 0 0 8px 0;">Exact scope could not be verified — matched structurally</p>
         <ul>
           {{range .Comparison.RBAC.Inferred}}
-          <li><span class="diff-marker inferred">≈</span> {{.RoleName}} <span class="diff-scope">({{.ScopeType}})</span></li>
+          <li>
+            <span class="diff-marker inferred">≈</span> {{.Model.RoleName}} <span class="diff-scope">({{.Model.ScopeType}})</span>
+            <div class="inferred-pair">Model:&nbsp; {{highlightScope .Model.Scope .Target.Scope "model"}}</div>
+            <div class="inferred-pair">Target: {{highlightScope .Model.Scope .Target.Scope "target"}}</div>
+          </li>
           {{end}}
         </ul>
       </div>
       {{end}}
 
-      {{$rolesTotal := len .Comparison.DirectoryRoles.OnlyA | add (len .Comparison.DirectoryRoles.OnlyB)}}
+      {{$rolesTotal:= len .Comparison.DirectoryRoles.OnlyA | add (len .Comparison.DirectoryRoles.OnlyB)}}
       {{if gt $rolesTotal 0}}
       <h3 style="margin-bottom: 12px; font-size: 1em; color: var(--primary);">Directory Roles Differences</h3>
       {{if .Comparison.DirectoryRoles.OnlyA}}
@@ -555,6 +566,31 @@ var compareFuncMap = template.FuncMap{
 			}
 		}
 		return n
+	},
+	// highlightScope renders one side of a scope pair with differing segments
+	// wrapped in <mark> tags. side must be "model" or "target".
+	"highlightScope": func(modelScope, targetScope, side string) template.HTML {
+		mParts := strings.Split(modelScope, "/")
+		tParts := strings.Split(targetScope, "/")
+
+		var parts, other []string
+		if side == "model" {
+			parts = mParts
+			other = tParts
+		} else {
+			parts = tParts
+			other = mParts
+		}
+
+		out := make([]string, len(parts))
+		for i, seg := range parts {
+			if i < len(other) && strings.EqualFold(seg, other[i]) {
+				out[i] = template.HTMLEscapeString(seg)
+			} else {
+				out[i] = "<mark>" + template.HTMLEscapeString(seg) + "</mark>"
+			}
+		}
+		return template.HTML(strings.Join(out, "/"))
 	},
 }
 

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-03-24
+
+### Added
+- **Inferred match scope highlighting** — inferred matches now show both model and target scope paths side-by-side with differing segments highlighted (brackets in terminal, `<mark>` in HTML)
+- `InferredMatch` struct pairs model + target role assignments for downstream consumption (JSON: `{"model": {...}, "target": {...}}`)
+- Inferred Matches section added to model compare detail view (terminal + HTML)
+
 ## [0.8.0] - 2026-03-24
 
 ### Added

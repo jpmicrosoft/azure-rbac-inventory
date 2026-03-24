@@ -52,6 +52,39 @@ func rbacSharedLabel(label string, count int) string {
 	return label
 }
 
+// scopeDiffSegments compares two ARM scope paths segment-by-segment and returns
+// the model and target paths with differing segments wrapped in brackets for
+// terminal display.
+func scopeDiffSegments(modelScope, targetScope string) (string, string) {
+	mParts := strings.Split(modelScope, "/")
+	tParts := strings.Split(targetScope, "/")
+
+	mOut := make([]string, len(mParts))
+	tOut := make([]string, len(tParts))
+
+	minLen := len(mParts)
+	if len(tParts) < minLen {
+		minLen = len(tParts)
+	}
+
+	for i := 0; i < minLen; i++ {
+		if strings.EqualFold(mParts[i], tParts[i]) {
+			mOut[i] = mParts[i]
+			tOut[i] = tParts[i]
+		} else {
+			mOut[i] = "[" + mParts[i] + "]"
+			tOut[i] = "[" + tParts[i] + "]"
+		}
+	}
+	for i := minLen; i < len(mParts); i++ {
+		mOut[i] = "[" + mParts[i] + "]"
+	}
+	for i := minLen; i < len(tParts); i++ {
+		tOut[i] = "[" + tParts[i] + "]"
+	}
+	return strings.Join(mOut, "/"), strings.Join(tOut, "/")
+}
+
 func printRBACDiff(result *compare.ComparisonResult) {
 	diff := result.RBAC
 	fmt.Println("  [RBAC] Role Assignment Differences")
@@ -123,28 +156,14 @@ func printRBACDiff(result *compare.ComparisonResult) {
 	}
 	fmt.Println()
 
-	// Inferred Matches – matched by RoleName+ScopeType when scope normalization failed
+	// Inferred Matches – show paired model/target scopes with diff highlighting
 	if len(diff.Inferred) > 0 {
 		fmt.Printf("    Inferred Matches (%d):\n", len(diff.Inferred))
-		type sharedEntry struct {
-			label string
-			count int
-		}
-		seen := map[string]*sharedEntry{}
-		order := []string{}
-		for _, a := range diff.Inferred {
-			lbl := rbacLabel(a)
-			if e, ok := seen[lbl]; ok {
-				e.count++
-			} else {
-				seen[lbl] = &sharedEntry{label: lbl, count: 1}
-				order = append(order, lbl)
-			}
-		}
-		sort.Strings(order)
-		for _, lbl := range order {
-			e := seen[lbl]
-			fmt.Printf("      ≈ %s\n", rbacSharedLabel(e.label, e.count))
+		for _, im := range diff.Inferred {
+			fmt.Printf("      ≈ %s (%s)\n", im.Model.RoleName, im.Model.ScopeType)
+			mScope, tScope := scopeDiffSegments(im.Model.Scope, im.Target.Scope)
+			fmt.Printf("          Model:  %s\n", mScope)
+			fmt.Printf("          Target: %s\n", tScope)
 		}
 		fmt.Println()
 	}
@@ -402,6 +421,17 @@ func printModelDetails(result *compare.ModelComparisonResult) {
 			comp.RBAC.OnlyB, comp.DirectoryRoles.OnlyB, comp.Groups.OnlyB)
 		fmt.Printf("    Extra (not in model) (%d):\n", len(extra))
 		printDriftItems(extra)
+
+		// Inferred matches – show paired model/target scopes with diff highlighting
+		if len(comp.RBAC.Inferred) > 0 {
+			fmt.Printf("    Inferred Matches (%d):\n", len(comp.RBAC.Inferred))
+			for _, im := range comp.RBAC.Inferred {
+				fmt.Printf("      ≈ %s (%s)\n", im.Model.RoleName, im.Model.ScopeType)
+				mScope, tScope := scopeDiffSegments(im.Model.Scope, im.Target.Scope)
+				fmt.Printf("          Model:  %s\n", mScope)
+				fmt.Printf("          Target: %s\n", tScope)
+			}
+		}
 
 		fmt.Println()
 	}
