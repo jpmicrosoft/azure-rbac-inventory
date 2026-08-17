@@ -33,12 +33,6 @@ type rbacHTMLGroup struct {
 	RoleGroups []rbacHTMLRoleGroup
 }
 
-// extractResourceCategory derives a resource type category name, the individual
-// resource identifier, and a sort priority from an ARM scope path.
-func extractResourceCategory(scope, scopeType string) (category, resourceID string, priority int) {
-	return extractResourceCategoryWithManagementGroupNames(scope, scopeType, nil)
-}
-
 func extractResourceCategoryWithManagementGroupNames(scope, scopeType string, managementGroupNames map[string]string) (category, resourceID string, priority int) {
 	parts := strings.Split(strings.TrimRight(scope, "/"), "/")
 
@@ -83,12 +77,6 @@ func extractResourceCategoryWithManagementGroupNames(scope, scopeType string, ma
 		return "Resources", "", 3
 	}
 	return "Other", "", 4
-}
-
-// groupRBACForHTML groups RBAC assignments into a two-level hierarchy:
-// resource type category → role name → list of resources.
-func groupRBACForHTML(assignments []rbac.RoleAssignment) []rbacHTMLGroup {
-	return groupRBACForHTMLWithManagementGroupNames(assignments, nil)
 }
 
 func groupRBACForHTMLWithManagementGroupNames(assignments []rbac.RoleAssignment, managementGroupNames map[string]string) []rbacHTMLGroup {

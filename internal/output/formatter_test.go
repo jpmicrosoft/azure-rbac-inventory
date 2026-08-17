@@ -669,7 +669,7 @@ func TestSanitizeForTerminal_DoesNotCorruptUnicode(t *testing.T) {
 		"한국어",
 		"emoji 🔒🛡️✅",
 		"family 👨‍👩‍👧‍👦",
-		"می‌خواهم",
+		"می\u200cخواهم",
 		"Ü ö ä ß",
 	}
 	for _, s := range inputs {

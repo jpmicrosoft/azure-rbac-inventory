@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Management group lookup is limited to groups referenced by the reported assignments, preventing unrelated tenant hierarchy data from appearing in JSON exports
 - Terminal output renders control and bidirectional formatting characters visibly to prevent ANSI, line-forging, and display-spoofing attacks
+- Upgraded Excelize and Go networking/cryptography modules to patched versions for published denial-of-service and authentication vulnerabilities
 
 ## [0.9.0] - 2026-03-24
 
