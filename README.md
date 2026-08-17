@@ -377,6 +377,14 @@ azure-rbac-inventory check <id> --output csv
 azure-rbac-inventory check <id> --output markdown
 ```
 
+## HTML Report Preview
+
+HTML exports provide a self-contained, browser-friendly report with RBAC assignments grouped by scope type. Referenced management groups show both their display name and identifier.
+
+> The preview below uses entirely synthetic identity and Azure resource data.
+
+![Anonymized Azure RBAC Inventory HTML report showing management group display names](docs/images/html-report-preview.png)
+
 ## Flags Reference
 
 | Flag | Description | Default | Env Var |
