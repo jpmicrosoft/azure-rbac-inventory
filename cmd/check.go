@@ -162,6 +162,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		MaxResults:            maxResultsFlag,
 		Concurrency:           concurrencyFlag,
 		PerIdentity:           perIdentityFlag,
+		LegacyOutput:          legacyOutputFlag,
 	}
 
 	var reports []*reportpkg.Report

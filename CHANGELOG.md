@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-17
+
+### Added
+- `--legacy-output` compatibility mode preserves GUID-only management group presentation and the previous CSV, Markdown, XLSX, and JSON schemas
+
+### Fixed
+- Management group RBAC scopes now show the friendly display name alongside the management group ID in table, HTML, CSV, Markdown, and XLSX reports, with ID fallback and explicit warnings when lookup fails
+- Management group lookups bypass stale ARM authorization caches, matching Azure CLI behavior for newly visible groups
+
+### Security
+- Management group lookup is limited to groups referenced by the reported assignments, preventing unrelated tenant hierarchy data from appearing in JSON exports
+- Terminal output renders control and bidirectional formatting characters visibly to prevent ANSI, line-forging, and display-spoofing attacks
+
 ## [0.9.0] - 2026-03-24
 
 ### Added

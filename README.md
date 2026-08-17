@@ -3,7 +3,6 @@
 [![CI](https://github.com/jpmicrosoft/azure-rbac-inventory/actions/workflows/ci.yml/badge.svg)](https://github.com/jpmicrosoft/azure-rbac-inventory/actions/workflows/ci.yml)
 [![Release](https://github.com/jpmicrosoft/azure-rbac-inventory/actions/workflows/release.yml/badge.svg)](https://github.com/jpmicrosoft/azure-rbac-inventory/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jpmicrosoft/azure-rbac-inventory)](https://goreportcard.com/report/github.com/jpmicrosoft/azure-rbac-inventory)
 
 A single-binary CLI tool that reports **all RBAC assignments, Entra ID directory roles, access package assignments, and group memberships** for any Azure identity — and can **compare** assignments between identities to detect drift.
 
@@ -22,7 +21,7 @@ Supports **Azure Commercial** and **Azure Government** clouds.
 - **Pattern Search** — Search by display name, SPN name, or wildcard pattern instead of requiring an exact ID
 - **File Input** — Batch-check multiple identities from a text file
 - **Export Formats** — Export results to CSV, HTML, Markdown, XLSX, or JSON files
-- **Grouped RBAC Output** — RBAC assignments are grouped by resource type for easier reading
+- **Grouped RBAC Output** — RBAC assignments are grouped by resource type; all human-readable report formats show referenced management groups as `Display Name (ID)` when accessible
 - **Dual Cloud** — Works with both Azure Commercial and Azure Government
 
 ## Requirements
@@ -43,7 +42,7 @@ The identity running this tool needs these permissions at minimum:
 
 | Permission | Scope | Purpose | Required? |
 |---|---|---|---|
-| `Reader` | Subscriptions or Management Groups | List and query RBAC role assignments | Yes |
+| `Reader` | Subscriptions or Management Groups | List/query RBAC role assignments and resolve management group display names | Yes |
 | `Directory.Read.All` | Microsoft Graph (Application or Delegated) | Resolve identities, directory roles, group memberships | Yes |
 | `EntitlementManagement.Read.All` | Microsoft Graph (Application or Delegated) | Access package assignments and requests | Optional — only needed with `--include-access-packages` |
 
@@ -108,6 +107,7 @@ Global Flags:
       --type string            Filter identity type (spn|user|group|managed-identity|app|all) (default "all")
       --export string          Export to file (format inferred from extension: .csv, .html, .md, .xlsx, .json)
       --per-identity           Separate output per identity (default false)
+      --legacy-output          Preserve GUID-only management group output and legacy export schemas
       --max-results int        Max search results for pattern matching (default 50)
       --concurrency int        Max concurrent identity checks (default 10)
       --timeout duration       Global execution timeout (default 30m)
@@ -491,7 +491,7 @@ The identity running this tool needs:
 
 | Permission | Scope | Purpose | Required? |
 |------------|-------|---------|-----------|
-| `Reader` | Subscriptions / Management Groups | Query RBAC role assignments | Yes |
+| `Reader` | Subscriptions / Management Groups | Query RBAC role assignments and resolve management group display names | Yes |
 | `Directory.Read.All` | Microsoft Graph | Resolve identities, query directory roles and group memberships | Yes |
 | `EntitlementManagement.Read.All` | Microsoft Graph | Query access package assignments and requests | Optional — only needed with `--include-access-packages` |
 
@@ -690,6 +690,9 @@ azure-rbac-inventory check "my-managed-identity" --type managed-identity
 **Q: Why are RBAC results showing 0 when I know there are assignments?**
 Verify the running identity has `Reader` access on the target subscriptions. Also check if you need `--subscriptions` to specify particular subscription IDs. Use `--verbose` to see which subscriptions were queried.
 
+**Q: Why does a management group show only its ID?**
+The tool resolves display names only for management groups referenced by the identity's RBAC assignments. If ARM cannot return a name, the report keeps the ID and adds a warning instead of failing the inventory.
+
 **Q: Can I export results for a manager or auditor?**
 Yes. Use `--export report.html` for a polished HTML report, or `--export report.xlsx` for Excel. CSV and Markdown are also supported.
 
@@ -742,6 +745,8 @@ The tool warns and falls back to non-workload comparison for that specific targe
 - **Application identities** — Application registrations (`#microsoft.graph.application`) do not support group membership lookups via the Graph API. The group memberships section will return empty for these identities. Service principals associated with the same app registration *do* support group membership lookups.
 - **Access package request limit** — When using `--include-access-packages`, access package requests are limited to the **50 most recent** results (ordered by `createdDateTime desc`). If the identity has a longer request history, older requests are not returned.
 - **Dual output** — Use `--export results.json` together with `--output table` to get human-readable table output on screen and machine-readable JSON saved to a file simultaneously. The legacy `--json-file` flag still works but is deprecated — use `--export report.json` instead.
+- **Management group names** — Only management groups referenced by the report's RBAC assignments are queried. Table, HTML, CSV, Markdown, and XLSX output show `Display Name (ID)` while preserving the raw ARM scope; JSON includes a `managementGroupNames` map containing only those referenced groups. Failed lookups retain the ID and add a warning.
+- **Legacy output** — Use `--legacy-output` to skip management group name lookups and preserve the previous GUID-only table/HTML presentation and CSV, Markdown, XLSX, and JSON schemas.
 - **Verbose mode** — `--verbose` currently only adds detail to group RBAC query warnings (e.g., when `--include-group-rbac` encounters a permission error on a specific group). It does not affect other sections.
 - **Eventual consistency** — All Graph API requests include the `ConsistencyLevel: eventual` header. This enables advanced query features but means results may be slightly stale (typically seconds, occasionally minutes) compared to the most recent directory changes.
 
@@ -751,6 +756,7 @@ The tool warns and falls back to non-workload comparison for that specific targe
 - **No secrets stored** — The tool does not store or cache any credentials. Authentication is delegated to the Azure Identity SDK which manages token lifecycle.
 - **Token caching** — Tokens are cached locally by the Azure Identity SDK (via MSAL) to avoid repeated login prompts. Cache files are stored with restricted permissions.
 - **Output sensitivity** — Report outputs (JSON, HTML, CSV, XLSX, etc.) contain identity information including object IDs, role assignments, and group memberships. Treat exported files as sensitive and handle according to your organization's data classification policies.
+- **Output encoding** — Terminal reports render control and bidirectional formatting characters visibly to prevent display spoofing. HTML reports use contextual template escaping.
 - **Network** — All API calls use HTTPS. The tool validates pagination URLs to prevent token theft via malicious redirect.
 
 ## Example Output

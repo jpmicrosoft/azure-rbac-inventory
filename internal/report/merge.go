@@ -86,7 +86,8 @@ func mergeGroup(reports []*Report, appID string) *Report {
 			ServicePrincipalType: base.Identity.ServicePrincipalType,
 			IsMerged:             true,
 		},
-		Cloud: base.Cloud,
+		Cloud:        base.Cloud,
+		LegacyOutput: base.LegacyOutput,
 	}
 
 	// Collect and deduplicate across all reports.
@@ -97,6 +98,9 @@ func mergeGroup(reports []*Report, appID string) *Report {
 	warnSeen := map[string]struct{}{}
 
 	for _, rpt := range reports {
+		merged.SubscriptionNames = mergeNameMaps(merged.SubscriptionNames, rpt.SubscriptionNames)
+		merged.ManagementGroupNames = mergeNameMaps(merged.ManagementGroupNames, rpt.ManagementGroupNames)
+
 		for _, a := range rpt.RBACAssignments {
 			key := a.RoleName + "|" + a.Scope
 			if _, dup := rbacSeen[key]; !dup {
@@ -135,6 +139,19 @@ func mergeGroup(reports []*Report, appID string) *Report {
 	}
 
 	return merged
+}
+
+func mergeNameMaps(dst, src map[string]string) map[string]string {
+	if len(src) == 0 {
+		return dst
+	}
+	if dst == nil {
+		dst = make(map[string]string, len(src))
+	}
+	for id, name := range src {
+		dst[id] = name
+	}
+	return dst
 }
 
 // pickSPN returns the first ServicePrincipal report, falling back to the first report.

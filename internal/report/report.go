@@ -17,7 +17,9 @@ type Report struct {
 	GroupMemberships      []graph.GroupMembership         `json:"groupMemberships"`
 	Warnings              []string                        `json:"warnings,omitempty"`
 	SubscriptionNames     map[string]string               `json:"subscriptionNames,omitempty"`
+	ManagementGroupNames  map[string]string               `json:"managementGroupNames,omitempty"`
 	SkippedAccessPackages bool                            `json:"skippedAccessPackages,omitempty"`
+	LegacyOutput          bool                            `json:"-"`
 }
 
 // MultiReport wraps multiple identity reports with aggregate stats.

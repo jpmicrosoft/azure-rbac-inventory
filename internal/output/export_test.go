@@ -136,6 +136,29 @@ func TestCSVFormatter_EmptyReport(t *testing.T) {
 	}
 }
 
+func TestCSVFormatter_ManagementGroupScopeName(t *testing.T) {
+	rpt := makeTestReport()
+	rpt.RBACAssignments = []rbac.RoleAssignment{{
+		RoleName:       "Reader",
+		Scope:          "/providers/Microsoft.Management/managementGroups/mg-guid",
+		ScopeType:      "Management Group",
+		AssignmentType: "Direct",
+	}}
+	rpt.ManagementGroupNames = map[string]string{"mg-guid": "Platform"}
+
+	data, err := (&CSVFormatter{}).FormatReport(rpt)
+	if err != nil {
+		t.Fatalf("FormatReport error: %v", err)
+	}
+	records, err := csv.NewReader(bytes.NewReader(data[len(csvBOM):])).ReadAll()
+	if err != nil {
+		t.Fatalf("failed to parse CSV: %v", err)
+	}
+	if got := records[1][len(csvHeader)-1]; got != "Platform (mg-guid)" {
+		t.Errorf("ScopeName = %q, want %q", got, "Platform (mg-guid)")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Markdown Formatter tests
 // ---------------------------------------------------------------------------
@@ -206,6 +229,29 @@ func TestMarkdownFormatter_EmptyReport(t *testing.T) {
 	}
 }
 
+func TestMarkdownFormatter_ManagementGroupScopeName(t *testing.T) {
+	rpt := makeTestReport()
+	rpt.RBACAssignments = []rbac.RoleAssignment{{
+		RoleName:       "Reader",
+		Scope:          "/providers/Microsoft.Management/managementGroups/mg-guid",
+		ScopeType:      "Management Group",
+		AssignmentType: "Direct",
+	}}
+	rpt.ManagementGroupNames = map[string]string{"mg-guid": "Platform | Security"}
+
+	data, err := (&MarkdownFormatter{}).FormatReport(rpt)
+	if err != nil {
+		t.Fatalf("FormatReport error: %v", err)
+	}
+	md := string(data)
+	if !strings.Contains(md, "| Scope Name |") {
+		t.Error("expected Scope Name column")
+	}
+	if !strings.Contains(md, "Platform \\| Security \\(mg-guid\\)") {
+		t.Error("expected escaped management group display name")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // HTML Formatter tests
 // ---------------------------------------------------------------------------
@@ -236,6 +282,29 @@ func TestHTMLFormatter_FormatReport(t *testing.T) {
 	}
 	if !strings.Contains(html, "</html>") {
 		t.Error("expected closing </html> tag")
+	}
+}
+
+func TestHTMLFormatter_ManagementGroupDisplayName(t *testing.T) {
+	rpt := makeTestReport()
+	rpt.RBACAssignments = []rbac.RoleAssignment{{
+		RoleName:       "Reader",
+		Scope:          "/providers/Microsoft.Management/managementGroups/mg-guid",
+		ScopeType:      "Management Group",
+		AssignmentType: "Direct",
+	}}
+	rpt.ManagementGroupNames = map[string]string{"mg-guid": "Platform & Security\nNorth"}
+
+	data, err := (HTMLFormatter{}).FormatReport(rpt)
+	if err != nil {
+		t.Fatalf("FormatReport error: %v", err)
+	}
+	html := string(data)
+	if !strings.Contains(html, "Platform &amp; Security\nNorth (mg-guid)") {
+		t.Errorf("expected resolved management group display name in HTML")
+	}
+	if strings.Contains(html, "␊") {
+		t.Error("HTML should preserve data for html/template escaping, not terminal-sanitize it")
 	}
 }
 
@@ -285,6 +354,142 @@ func TestXLSXFormatter_FormatReport(t *testing.T) {
 			t.Error("default Sheet1 should have been removed")
 		}
 	}
+}
+
+func TestXLSXFormatter_ManagementGroupScopeName(t *testing.T) {
+	rpt := makeTestReport()
+	rpt.RBACAssignments = []rbac.RoleAssignment{{
+		RoleName:       "Reader",
+		Scope:          "/providers/Microsoft.Management/managementGroups/mg-guid",
+		ScopeType:      "Management Group",
+		AssignmentType: "Direct",
+	}}
+	rpt.ManagementGroupNames = map[string]string{"mg-guid": "Platform"}
+
+	data, err := (XLSXFormatter{}).FormatReport(rpt)
+	if err != nil {
+		t.Fatalf("FormatReport error: %v", err)
+	}
+	xlsx, err := excelize.OpenReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to open XLSX output: %v", err)
+	}
+	defer func() { _ = xlsx.Close() }()
+
+	rows, err := xlsx.GetRows("RBAC Assignments")
+	if err != nil {
+		t.Fatalf("failed to read RBAC sheet: %v", err)
+	}
+	if len(rows) < 2 || len(rows[1]) < 3 {
+		t.Fatalf("unexpected RBAC sheet rows: %v", rows)
+	}
+	if rows[0][2] != "Scope Name" {
+		t.Errorf("header = %q, want %q", rows[0][2], "Scope Name")
+	}
+	if rows[1][2] != "Platform (mg-guid)" {
+		t.Errorf("Scope Name = %q, want %q", rows[1][2], "Platform (mg-guid)")
+	}
+}
+
+func TestLegacyOutputSchemas(t *testing.T) {
+	rpt := makeTestReport()
+	rpt.RBACAssignments = []rbac.RoleAssignment{{
+		RoleName:       "Reader",
+		Scope:          "/providers/Microsoft.Management/managementGroups/mg-guid",
+		ScopeType:      "Management Group",
+		AssignmentType: "Direct",
+	}}
+	rpt.ManagementGroupNames = map[string]string{"mg-guid": "Platform"}
+	rpt.LegacyOutput = true
+
+	t.Run("CSV", func(t *testing.T) {
+		data, err := (&CSVFormatter{}).FormatReport(rpt)
+		if err != nil {
+			t.Fatalf("FormatReport error: %v", err)
+		}
+		records, err := csv.NewReader(bytes.NewReader(data[len(csvBOM):])).ReadAll()
+		if err != nil {
+			t.Fatalf("failed to parse CSV: %v", err)
+		}
+		if len(records[0]) != len(legacyCSVHeader) {
+			t.Fatalf("legacy CSV header columns = %d, want %d", len(records[0]), len(legacyCSVHeader))
+		}
+		for i, want := range legacyCSVHeader {
+			if records[0][i] != want {
+				t.Errorf("legacy CSV header[%d] = %q, want %q", i, records[0][i], want)
+			}
+		}
+		if len(records[1]) != len(legacyCSVHeader) {
+			t.Errorf("legacy CSV row columns = %d, want %d", len(records[1]), len(legacyCSVHeader))
+		}
+	})
+
+	t.Run("Markdown", func(t *testing.T) {
+		data, err := (&MarkdownFormatter{}).FormatReport(rpt)
+		if err != nil {
+			t.Fatalf("FormatReport error: %v", err)
+		}
+		md := string(data)
+		if strings.Contains(md, "Scope Name") || strings.Contains(md, "Platform") {
+			t.Errorf("legacy Markdown contains management group name/schema:\n%s", md)
+		}
+		if !strings.Contains(md, "/managementGroups/mg-guid") {
+			t.Error("legacy Markdown should retain raw management group scope")
+		}
+	})
+
+	t.Run("XLSX", func(t *testing.T) {
+		data, err := (XLSXFormatter{}).FormatReport(rpt)
+		if err != nil {
+			t.Fatalf("FormatReport error: %v", err)
+		}
+		xlsx, err := excelize.OpenReader(bytes.NewReader(data))
+		if err != nil {
+			t.Fatalf("failed to open XLSX output: %v", err)
+		}
+		defer func() { _ = xlsx.Close() }()
+		rows, err := xlsx.GetRows("RBAC Assignments")
+		if err != nil {
+			t.Fatalf("failed to read RBAC sheet: %v", err)
+		}
+		wantHeaders := []string{"Role Name", "Scope", "Scope Type", "Assignment Type", "Principal Type", "Condition"}
+		if len(rows) == 0 || len(rows[0]) != len(wantHeaders) {
+			t.Fatalf("legacy XLSX headers = %v, want %v", rows, wantHeaders)
+		}
+		for i, want := range wantHeaders {
+			if rows[0][i] != want {
+				t.Errorf("legacy XLSX header[%d] = %q, want %q", i, rows[0][i], want)
+			}
+		}
+	})
+
+	t.Run("HTML", func(t *testing.T) {
+		data, err := (HTMLFormatter{}).FormatReport(rpt)
+		if err != nil {
+			t.Fatalf("FormatReport error: %v", err)
+		}
+		html := string(data)
+		if strings.Contains(html, "Platform") {
+			t.Error("legacy HTML should not contain management group display name")
+		}
+		if !strings.Contains(html, "mg-guid") {
+			t.Error("legacy HTML should contain management group ID")
+		}
+	})
+
+	t.Run("JSON", func(t *testing.T) {
+		data, err := (&JSONFormatter{}).FormatReport(rpt)
+		if err != nil {
+			t.Fatalf("FormatReport error: %v", err)
+		}
+		var parsed map[string]any
+		if err := json.Unmarshal(data, &parsed); err != nil {
+			t.Fatalf("invalid JSON: %v", err)
+		}
+		if _, ok := parsed["managementGroupNames"]; ok {
+			t.Error("legacy JSON should omit managementGroupNames")
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------

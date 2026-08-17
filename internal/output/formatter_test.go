@@ -579,6 +579,152 @@ func TestExtractResourceInfo(t *testing.T) {
 	}
 }
 
+func TestManagementGroupDisplayName(t *testing.T) {
+	names := map[string]string{"MG-GUID": "Platform"}
+
+	if got := managementGroupDisplayName("mg-guid", names); got != "Platform (mg-guid)" {
+		t.Errorf("managementGroupDisplayName() = %q, want %q", got, "Platform (mg-guid)")
+	}
+	if got := managementGroupDisplayName("unknown", names); got != "unknown" {
+		t.Errorf("unknown management group = %q, want %q", got, "unknown")
+	}
+
+	// nil map falls back to ID
+	if got := managementGroupDisplayName("any-id", nil); got != "any-id" {
+		t.Errorf("nil map: managementGroupDisplayName() = %q, want %q", got, "any-id")
+	}
+
+	// empty map falls back to ID
+	if got := managementGroupDisplayName("any-id", map[string]string{}); got != "any-id" {
+		t.Errorf("empty map: managementGroupDisplayName() = %q, want %q", got, "any-id")
+	}
+
+	// display name equals ID (case-insensitive) falls back to ID only
+	selfMap := map[string]string{"mg1": "mg1"}
+	if got := managementGroupDisplayName("mg1", selfMap); got != "mg1" {
+		t.Errorf("self-referencing: managementGroupDisplayName() = %q, want %q", got, "mg1")
+	}
+
+	// exact case match (no need for case-insensitive fallback)
+	exactMap := map[string]string{"mg-exact": "My Group"}
+	if got := managementGroupDisplayName("mg-exact", exactMap); got != "My Group (mg-exact)" {
+		t.Errorf("exact match: managementGroupDisplayName() = %q, want %q", got, "My Group (mg-exact)")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Security: sanitizeForTerminal tests
+// ---------------------------------------------------------------------------
+
+func TestSanitizeForTerminal(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"plain ASCII", "Hello World", "Hello World"},
+		{"Unicode preserved", "Ünïcödé 日本語", "Ünïcödé 日本語"},
+		{"empty string", "", ""},
+		{"tab becomes space", "col1\tcol2", "col1 col2"},
+		// C0 controls
+		{"newline replaced", "line1\nline2", "line1␊line2"},
+		{"carriage return replaced", "line1\rline2", "line1␍line2"},
+		{"null byte replaced", "before\x00after", "before␀after"},
+		{"BEL replaced", "alert\x07here", "alert␇here"},
+		{"ESC replaced", "esc\x1bhere", "esc␛here"},
+		// ANSI escape sequence
+		{"ANSI clear screen", "\x1b[2J\x1b[H", "␛[2J␛[H"},
+		{"ANSI color", "\x1b[31mRED\x1b[0m", "␛[31mRED␛[0m"},
+		// DEL
+		{"DEL replaced", "before\x7Fafter", "before␡after"},
+		// C1 controls
+		{"C1 0x85 NEL", "a\xc2\x85b", "a<0x85>b"},
+		{"C1 0x9B CSI", "a\xc2\x9bb", "a<0x9B>b"},
+		// Bidi controls
+		{"RLO bidi override", "a\u202Eb", "a<U+202E>b"},
+		{"LRI bidi isolate", "a\u2066b", "a<U+2066>b"},
+		{"RLM bidi mark", "a\u200Fb", "a<U+200F>b"},
+		{"ALM bidi mark", "a\u061Cb", "a<U+061C>b"},
+		{"line separator", "a\u2028b", "a<U+2028>b"},
+		// Combination attack
+		{"full attack string", "\x1b[2J\x1b[HFAKE REPORT\nRole: Owner\r\n\u202EAdmin", "␛[2J␛[HFAKE REPORT␊Role: Owner␍␊<U+202E>Admin"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeForTerminal(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeForTerminal(%q)\n  got  %q\n  want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeForTerminal_DoesNotCorruptUnicode(t *testing.T) {
+	// Various scripts that must pass through unchanged
+	inputs := []string{
+		"Ñoño España",
+		"日本語テスト",
+		"العربية",
+		"Ελληνικά",
+		"한국어",
+		"emoji 🔒🛡️✅",
+		"family 👨‍👩‍👧‍👦",
+		"می‌خواهم",
+		"Ü ö ä ß",
+	}
+	for _, s := range inputs {
+		got := sanitizeForTerminal(s)
+		if got != s {
+			t.Errorf("sanitizeForTerminal(%q) = %q, should be unchanged", s, got)
+		}
+	}
+}
+
+func TestPrintTable_TerminalInjectionInDisplayName(t *testing.T) {
+	rpt := &report.Report{
+		Identity: &identity.Identity{
+			ObjectID:    "00000000-0000-0000-0000-000000000001",
+			DisplayName: "Evil\x1b[2JCLEAR\nFakeHeader",
+			Type:        identity.TypeUser,
+		},
+		Cloud: "AzureCloud",
+		RBACAssignments: []rbac.RoleAssignment{
+			{
+				RoleName:       "Reader\x1b[31m",
+				Scope:          "/providers/Microsoft.Management/managementGroups/mg1",
+				ScopeType:      "Management Group",
+				AssignmentType: "Direct",
+			},
+		},
+		ManagementGroupNames: map[string]string{"mg1": "Evil\nMG\x1b[2J"},
+	}
+
+	out := captureStdout(t, func() {
+		PrintTable(rpt)
+	})
+
+	// Verify no raw ESC or newline injection in the output
+	if strings.Contains(out, "\x1b") {
+		t.Error("terminal output contains raw ESC byte - injection not sanitized")
+	}
+	// The display name should not have injected a real newline that creates a fake header
+	// (the legitimate newlines from fmt.Println are fine, but the \n inside the name should be replaced)
+	if strings.Contains(out, "FakeHeader") && strings.Contains(out, "\nFakeHeader") {
+		// Check that FakeHeader appears on the SAME line as the name, not on its own line
+		lines := strings.Split(out, "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "FakeHeader" {
+				t.Error("injected newline created a standalone 'FakeHeader' line")
+			}
+		}
+	}
+
+	// Verify sanitized control picture characters are present
+	if !strings.Contains(out, "␛") {
+		t.Error("expected sanitized ESC (␛) in output")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // friendlyResourceType tests
 // ---------------------------------------------------------------------------
@@ -703,6 +849,52 @@ func TestPrintRBACAssignments_EmptyList(t *testing.T) {
 	}
 	if !strings.Contains(out, "(0)") {
 		t.Error("empty assignments should show count (0)")
+	}
+}
+
+func TestPrintRBACAssignments_ManagementGroupDisplayName(t *testing.T) {
+	assignments := []rbac.RoleAssignment{{
+		RoleName:       "Reader",
+		Scope:          "/providers/Microsoft.Management/managementGroups/mg-guid",
+		ScopeType:      "Management Group",
+		AssignmentType: "Direct",
+	}}
+
+	out := captureStdout(t, func() {
+		printRBACAssignmentsWithManagementGroupNames(assignments, map[string]string{"mg-guid": "Platform"})
+	})
+
+	if !strings.Contains(out, "Management Group: Platform (mg-guid)") {
+		t.Errorf("output should contain resolved management group name:\n%s", out)
+	}
+}
+
+func TestPrintTable_LegacyManagementGroupOutput(t *testing.T) {
+	rpt := &report.Report{
+		Identity: &identity.Identity{
+			ObjectID:    "00000000-0000-0000-0000-000000000001",
+			DisplayName: "Legacy",
+			Type:        identity.TypeUser,
+		},
+		Cloud: "AzureCloud",
+		RBACAssignments: []rbac.RoleAssignment{{
+			RoleName:       "Reader",
+			Scope:          "/providers/Microsoft.Management/managementGroups/mg-guid",
+			ScopeType:      "Management Group",
+			AssignmentType: "Direct",
+		}},
+		ManagementGroupNames: map[string]string{"mg-guid": "Platform"},
+		LegacyOutput:         true,
+	}
+
+	out := captureStdout(t, func() {
+		PrintTable(rpt)
+	})
+	if strings.Contains(out, "Platform") {
+		t.Errorf("legacy table should not contain display name:\n%s", out)
+	}
+	if !strings.Contains(out, "Management Group: mg-guid") {
+		t.Errorf("legacy table should contain management group ID:\n%s", out)
 	}
 }
 

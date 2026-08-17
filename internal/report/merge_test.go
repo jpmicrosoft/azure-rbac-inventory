@@ -80,6 +80,8 @@ func TestMergeRelatedReports_MergeSameAppID(t *testing.T) {
 			{RoleName: "Reader", Scope: "/subscriptions/sub1"},
 			{RoleName: "Contributor", Scope: "/subscriptions/sub2"},
 		},
+		SubscriptionNames:    map[string]string{"sub1": "Subscription One"},
+		ManagementGroupNames: map[string]string{"mg1": "Platform"},
 	}
 	app := &Report{
 		Identity: &identity.Identity{
@@ -92,6 +94,8 @@ func TestMergeRelatedReports_MergeSameAppID(t *testing.T) {
 		RBACAssignments: []rbac.RoleAssignment{
 			{RoleName: "Owner", Scope: "/subscriptions/sub3"},
 		},
+		SubscriptionNames:    map[string]string{"sub3": "Subscription Three"},
+		ManagementGroupNames: map[string]string{"mg2": "Landing Zones"},
 	}
 
 	got := MergeRelatedReports([]*Report{spn, app})
@@ -112,6 +116,12 @@ func TestMergeRelatedReports_MergeSameAppID(t *testing.T) {
 	}
 	if len(merged.RBACAssignments) != 3 {
 		t.Errorf("expected 3 RBAC assignments, got %d", len(merged.RBACAssignments))
+	}
+	if len(merged.SubscriptionNames) != 2 {
+		t.Errorf("expected 2 merged subscription names, got %d", len(merged.SubscriptionNames))
+	}
+	if len(merged.ManagementGroupNames) != 2 {
+		t.Errorf("expected 2 merged management group names, got %d", len(merged.ManagementGroupNames))
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	cloudenv "github.com/jpmicrosoft/azure-rbac-inventory/internal/cloud"
+	"github.com/jpmicrosoft/azure-rbac-inventory/internal/rbac"
 )
 
 // ---------- Run: identity ID validation ----------
@@ -357,6 +358,9 @@ func TestConfig_ZeroValueDefaults(t *testing.T) {
 	if cfg.JSONFile != "" {
 		t.Errorf("JSONFile zero value = %q, want empty", cfg.JSONFile)
 	}
+	if cfg.LegacyOutput {
+		t.Error("LegacyOutput zero value should be false")
+	}
 }
 
 func TestConfig_WithAllFields(t *testing.T) {
@@ -369,6 +373,7 @@ func TestConfig_WithAllFields(t *testing.T) {
 		Verbose:       true,
 		OutputFormat:  "json",
 		JSONFile:      "/tmp/report.json",
+		LegacyOutput:  true,
 	}
 
 	if cfg.IdentityID != "00000000-0000-0000-0000-000000000001" {
@@ -394,6 +399,9 @@ func TestConfig_WithAllFields(t *testing.T) {
 	}
 	if cfg.JSONFile != "/tmp/report.json" {
 		t.Errorf("JSONFile = %q, want set value", cfg.JSONFile)
+	}
+	if !cfg.LegacyOutput {
+		t.Error("LegacyOutput should be true")
 	}
 }
 
@@ -629,4 +637,73 @@ func TestRun_CancelledContext_FailsGracefully(t *testing.T) {
 	}()
 
 	// If we get here without hanging, the test passes.
+}
+
+// ---------- extractManagementGroupIDs ----------
+
+func TestExtractManagementGroupIDs(t *testing.T) {
+	tests := []struct {
+		name        string
+		assignments []rbac.RoleAssignment
+		want        []string
+	}{
+		{
+			name:        "nil assignments",
+			assignments: nil,
+			want:        nil,
+		},
+		{
+			name: "no management group assignments",
+			assignments: []rbac.RoleAssignment{
+				{Scope: "/subscriptions/sub1", ScopeType: "Subscription"},
+				{Scope: "/subscriptions/sub1/resourceGroups/rg1", ScopeType: "Resource Group"},
+			},
+			want: nil,
+		},
+		{
+			name: "single management group",
+			assignments: []rbac.RoleAssignment{
+				{Scope: "/providers/Microsoft.Management/managementGroups/mg1", ScopeType: "Management Group"},
+			},
+			want: []string{"mg1"},
+		},
+		{
+			name: "duplicates deduplicated",
+			assignments: []rbac.RoleAssignment{
+				{Scope: "/providers/Microsoft.Management/managementGroups/mg1", ScopeType: "Management Group"},
+				{Scope: "/providers/Microsoft.Management/managementGroups/mg1", ScopeType: "Management Group"},
+				{Scope: "/providers/Microsoft.Management/managementGroups/mg2", ScopeType: "Management Group"},
+			},
+			want: []string{"mg1", "mg2"},
+		},
+		{
+			name: "mixed scope types",
+			assignments: []rbac.RoleAssignment{
+				{Scope: "/subscriptions/sub1", ScopeType: "Subscription"},
+				{Scope: "/providers/Microsoft.Management/managementGroups/mg-abc", ScopeType: "Management Group"},
+				{Scope: "/subscriptions/sub2/resourceGroups/rg1", ScopeType: "Resource Group"},
+			},
+			want: []string{"mg-abc"},
+		},
+		{
+			name: "trailing slash handled",
+			assignments: []rbac.RoleAssignment{
+				{Scope: "/providers/Microsoft.Management/managementGroups/mg1/", ScopeType: "Management Group"},
+			},
+			want: []string{"mg1"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractManagementGroupIDs(tt.assignments)
+			if len(got) != len(tt.want) {
+				t.Fatalf("extractManagementGroupIDs() returned %d IDs, want %d: %v", len(got), len(tt.want), got)
+			}
+			for i, w := range tt.want {
+				if got[i] != w {
+					t.Errorf("got[%d] = %q, want %q", i, got[i], w)
+				}
+			}
+		})
+	}
 }

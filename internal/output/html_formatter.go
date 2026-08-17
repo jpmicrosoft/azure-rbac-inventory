@@ -36,14 +36,16 @@ type rbacHTMLGroup struct {
 // extractResourceCategory derives a resource type category name, the individual
 // resource identifier, and a sort priority from an ARM scope path.
 func extractResourceCategory(scope, scopeType string) (category, resourceID string, priority int) {
+	return extractResourceCategoryWithManagementGroupNames(scope, scopeType, nil)
+}
+
+func extractResourceCategoryWithManagementGroupNames(scope, scopeType string, managementGroupNames map[string]string) (category, resourceID string, priority int) {
 	parts := strings.Split(strings.TrimRight(scope, "/"), "/")
 
 	switch scopeType {
 	case "Management Group":
-		for i, p := range parts {
-			if p == "managementGroups" && i+1 < len(parts) {
-				return "Management Groups", parts[i+1], 0
-			}
+		if scopeName := managementGroupScopeName(scope, scopeType, managementGroupNames); scopeName != "" {
+			return "Management Groups", scopeName, 0
 		}
 		return "Management Groups", "", 0
 	case "Subscription":
@@ -86,6 +88,10 @@ func extractResourceCategory(scope, scopeType string) (category, resourceID stri
 // groupRBACForHTML groups RBAC assignments into a two-level hierarchy:
 // resource type category → role name → list of resources.
 func groupRBACForHTML(assignments []rbac.RoleAssignment) []rbacHTMLGroup {
+	return groupRBACForHTMLWithManagementGroupNames(assignments, nil)
+}
+
+func groupRBACForHTMLWithManagementGroupNames(assignments []rbac.RoleAssignment, managementGroupNames map[string]string) []rbacHTMLGroup {
 	type roleKey struct {
 		roleName       string
 		assignmentType string
@@ -102,7 +108,7 @@ func groupRBACForHTML(assignments []rbac.RoleAssignment) []rbacHTMLGroup {
 	categories := map[string]*categoryEntry{}
 
 	for _, a := range assignments {
-		cat, resID, priority := extractResourceCategory(a.Scope, a.ScopeType)
+		cat, resID, priority := extractResourceCategoryWithManagementGroupNames(a.Scope, a.ScopeType, managementGroupNames)
 
 		entry, ok := categories[cat]
 		if !ok {
@@ -193,9 +199,13 @@ func (f HTMLFormatter) FormatReport(rpt *reportpkg.Report) ([]byte, error) {
 		return nil, fmt.Errorf("html template parse error: %w", err)
 	}
 	var buf bytes.Buffer
+	names := rpt.ManagementGroupNames
+	if rpt.LegacyOutput {
+		names = nil
+	}
 	data := htmlReportData{
 		Report:     rpt,
-		RBACGroups: groupRBACForHTML(rpt.RBACAssignments),
+		RBACGroups: groupRBACForHTMLWithManagementGroupNames(rpt.RBACAssignments, names),
 		Generated:  time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := tmpl.Execute(&buf, data); err != nil {
@@ -215,9 +225,13 @@ func (f HTMLFormatter) FormatMultiReport(reports []*reportpkg.Report) ([]byte, e
 	var buf bytes.Buffer
 	identities := make([]htmlIdentityData, len(reports))
 	for i, rpt := range reports {
+		names := rpt.ManagementGroupNames
+		if rpt.LegacyOutput {
+			names = nil
+		}
 		identities[i] = htmlIdentityData{
 			Report:     rpt,
-			RBACGroups: groupRBACForHTML(rpt.RBACAssignments),
+			RBACGroups: groupRBACForHTMLWithManagementGroupNames(rpt.RBACAssignments, names),
 		}
 	}
 	data := htmlMultiData{

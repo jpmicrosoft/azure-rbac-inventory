@@ -133,9 +133,13 @@ func (x XLSXFormatter) FormatReport(rpt *reportpkg.Report) ([]byte, error) {
 	}
 
 	// RBAC Assignments
+	rbacHeaders := []string{"Role Name", "Scope", "Scope Name", "Scope Type", "Assignment Type", "Principal Type", "Condition"}
+	if rpt.LegacyOutput {
+		rbacHeaders = []string{"Role Name", "Scope", "Scope Type", "Assignment Type", "Principal Type", "Condition"}
+	}
 	if err := xlsxWriteSheet(f, "RBAC Assignments", hStyle,
-		[]string{"Role Name", "Scope", "Scope Type", "Assignment Type", "Principal Type", "Condition"},
-		rbacToRows(rpt.RBACAssignments)); err != nil {
+		rbacHeaders,
+		rbacToRows(rpt.RBACAssignments, rpt.ManagementGroupNames, rpt.LegacyOutput)); err != nil {
 		return nil, err
 	}
 
@@ -203,6 +207,7 @@ func (x XLSXFormatter) FormatMultiReport(reports []*reportpkg.Report) ([]byte, e
 		allGroups   [][]string
 		allWarnings [][]string
 	)
+	legacy := reportsUseLegacyOutput(reports)
 
 	for _, rpt := range reports {
 		name := rpt.Identity.DisplayName
@@ -213,7 +218,12 @@ func (x XLSXFormatter) FormatMultiReport(reports []*reportpkg.Report) ([]byte, e
 		})
 
 		for _, a := range rpt.RBACAssignments {
-			allRBAC = append(allRBAC, []string{name, a.RoleName, a.Scope, a.ScopeType, a.AssignmentType, a.PrincipalType, a.Condition})
+			row := []string{name, a.RoleName, a.Scope}
+			if !legacy {
+				row = append(row, managementGroupScopeName(a.Scope, a.ScopeType, rpt.ManagementGroupNames))
+			}
+			row = append(row, a.ScopeType, a.AssignmentType, a.PrincipalType, a.Condition)
+			allRBAC = append(allRBAC, row)
 		}
 		for _, d := range rpt.DirectoryRoles {
 			allDirRoles = append(allDirRoles, []string{name, d.RoleName, d.RoleID, d.Status})
@@ -236,8 +246,11 @@ func (x XLSXFormatter) FormatMultiReport(reports []*reportpkg.Report) ([]byte, e
 		[]string{"Display Name", "Object ID", "Type", "App ID", "SPN Type", "Cloud"}, summaryRows); err != nil {
 		return nil, err
 	}
-	if err := xlsxWriteSheet(f, "RBAC Assignments", hStyle,
-		[]string{"Identity", "Role Name", "Scope", "Scope Type", "Assignment Type", "Principal Type", "Condition"}, allRBAC); err != nil {
+	rbacHeaders := []string{"Identity", "Role Name", "Scope", "Scope Name", "Scope Type", "Assignment Type", "Principal Type", "Condition"}
+	if legacy {
+		rbacHeaders = []string{"Identity", "Role Name", "Scope", "Scope Type", "Assignment Type", "Principal Type", "Condition"}
+	}
+	if err := xlsxWriteSheet(f, "RBAC Assignments", hStyle, rbacHeaders, allRBAC); err != nil {
 		return nil, err
 	}
 	if err := xlsxWriteSheet(f, "Directory Roles", hStyle,
@@ -274,10 +287,15 @@ func (x XLSXFormatter) FormatMultiReport(reports []*reportpkg.Report) ([]byte, e
 
 // ── Row conversion helpers ───────────────────────────────────────────────────
 
-func rbacToRows(assignments []rbac.RoleAssignment) [][]string {
+func rbacToRows(assignments []rbac.RoleAssignment, managementGroupNames map[string]string, legacy bool) [][]string {
 	rows := make([][]string, len(assignments))
 	for i, a := range assignments {
-		rows[i] = []string{a.RoleName, a.Scope, a.ScopeType, a.AssignmentType, a.PrincipalType, a.Condition}
+		row := []string{a.RoleName, a.Scope}
+		if !legacy {
+			row = append(row, managementGroupScopeName(a.Scope, a.ScopeType, managementGroupNames))
+		}
+		row = append(row, a.ScopeType, a.AssignmentType, a.PrincipalType, a.Condition)
+		rows[i] = row
 	}
 	return rows
 }

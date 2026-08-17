@@ -22,6 +22,7 @@ var (
 	typeFlag                  string        // --type: identity type filter
 	exportFlag                string        // --export: export file path (format from extension)
 	perIdentityFlag           bool          // --per-identity: separate output per identity
+	legacyOutputFlag          bool          // --legacy-output: preserve pre-management-group-name output
 	maxResultsFlag            int           // --max-results: max identities from pattern search
 	concurrencyFlag           int           // --concurrency: max concurrent identity checks
 	timeoutFlag               time.Duration // --timeout: global execution timeout
@@ -56,6 +57,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&typeFlag, "type", "all", "Identity type filter (all|spn|user|group|managed-identity|app)")
 	rootCmd.PersistentFlags().StringVar(&exportFlag, "export", "", "Export to file (format auto-detected from extension: .csv/.html/.md/.xlsx/.json)")
 	rootCmd.PersistentFlags().BoolVar(&perIdentityFlag, "per-identity", false, "Separate output/file per identity when processing multiple")
+	rootCmd.PersistentFlags().BoolVar(&legacyOutputFlag, "legacy-output", false, "Preserve GUID-only management group output and legacy export schemas")
 	rootCmd.PersistentFlags().IntVar(&maxResultsFlag, "max-results", 50, "Max identities to return from pattern search")
 	rootCmd.PersistentFlags().IntVar(&concurrencyFlag, "concurrency", 10, "Max concurrent identity checks for batch processing")
 	rootCmd.PersistentFlags().DurationVar(&timeoutFlag, "timeout", 30*time.Minute, "Global execution timeout (e.g. 10m, 1h)")

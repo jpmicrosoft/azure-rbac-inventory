@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -9,6 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/managementgroups/armmanagementgroups"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions"
 	"golang.org/x/sync/errgroup"
 
@@ -162,6 +164,48 @@ func (c *Checker) ListSubscriptionNames(ctx context.Context, filter []string) (m
 	return names, nil
 }
 
+// ListManagementGroupNames resolves only the requested management group IDs.
+// Individual lookup failures fall back to the ID and return a warning.
+func (c *Checker) ListManagementGroupNames(ctx context.Context, ids []string) (map[string]string, []string, error) {
+	if len(ids) == 0 {
+		return nil, nil, nil
+	}
+
+	opts := &arm.ClientOptions{}
+	opts.Cloud = c.env.CloudConfig
+
+	client, err := armmanagementgroups.NewClient(c.cred, opts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create management groups client: %w", err)
+	}
+
+	return resolveManagementGroupNames(ctx, client, ids)
+}
+
+func resolveManagementGroupNames(ctx context.Context, client *armmanagementgroups.Client, ids []string) (map[string]string, []string, error) {
+	names := make(map[string]string, len(ids))
+	var warnings []string
+	cacheControl := "no-cache"
+	getOptions := &armmanagementgroups.ClientGetOptions{CacheControl: &cacheControl}
+
+	for _, id := range ids {
+		resp, err := client.Get(ctx, id, getOptions)
+		if err != nil {
+			// Non-fatal: fall back to ID, record warning.
+			names[id] = id
+			warnings = append(warnings, fmt.Sprintf("management group %q name lookup failed: %v", id, sanitizeARMError(err)))
+			continue
+		}
+		displayName := id // fallback
+		if resp.Properties != nil && resp.Properties.DisplayName != nil && *resp.Properties.DisplayName != "" {
+			displayName = *resp.Properties.DisplayName
+		}
+		names[id] = displayName
+	}
+
+	return names, warnings, nil
+}
+
 func (c *Checker) getAssignmentsForSubscription(ctx context.Context, subscriptionID string, principalID string) ([]RoleAssignment, error) {
 	opts := &arm.ClientOptions{}
 	opts.Cloud = c.env.CloudConfig
@@ -277,6 +321,17 @@ func safeDeref(s *string) string {
 // sanitizeARMError extracts a concise error message from verbose ARM SDK errors
 // which include full HTTP response bodies.
 func sanitizeARMError(err error) error {
+	var responseErr *azcore.ResponseError
+	if errors.As(err, &responseErr) {
+		switch {
+		case responseErr.StatusCode != 0 && responseErr.ErrorCode != "":
+			return fmt.Errorf("ARM request failed with status %d (%s)", responseErr.StatusCode, responseErr.ErrorCode)
+		case responseErr.StatusCode != 0:
+			return fmt.Errorf("ARM request failed with status %d", responseErr.StatusCode)
+		case responseErr.ErrorCode != "":
+			return fmt.Errorf("ARM request failed (%s)", responseErr.ErrorCode)
+		}
+	}
 	msg := err.Error()
 	if idx := strings.Index(msg, "\n"); idx > 0 {
 		msg = strings.TrimSpace(msg[:idx])

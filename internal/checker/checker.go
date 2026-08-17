@@ -33,6 +33,7 @@ type Config struct {
 	MaxResults            int    // max search results
 	Concurrency           int    // max concurrent checks
 	PerIdentity           bool   // separate output per identity
+	LegacyOutput          bool   // preserve pre-management-group-name output
 }
 
 // Run executes the identity check: validates inputs, resolves the identity,
@@ -70,8 +71,9 @@ func Run(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environm
 	fmt.Fprintf(os.Stderr, "Found: %s (%s)\n", ident.DisplayName, ident.Type)
 
 	report := &reportpkg.Report{
-		Identity: ident,
-		Cloud:    env.Name,
+		Identity:     ident,
+		Cloud:        env.Name,
+		LegacyOutput: cfg.LegacyOutput,
 	}
 
 	// Run independent queries concurrently
@@ -227,6 +229,22 @@ func Run(ctx context.Context, cred azcore.TokenCredential, env cloudenv.Environm
 		fmt.Fprintf(os.Stderr, "%d additional assignments via groups\n", len(groupRBAC))
 	}
 
+	// Collect unique management group IDs referenced in RBAC assignments.
+	mgIDs := extractManagementGroupIDs(report.RBACAssignments)
+	if !cfg.LegacyOutput && len(mgIDs) > 0 {
+		fmt.Fprint(os.Stderr, "Resolving management group display names...\n")
+		names, mgWarns, err := rbacChecker.ListManagementGroupNames(ctx, mgIDs)
+		if err != nil {
+			warning := fmt.Sprintf("management group name lookup failed: %v", err)
+			fmt.Fprintf(os.Stderr, "Warning: %s\n", warning)
+			report.Warnings = append(report.Warnings, warning)
+		} else {
+			report.ManagementGroupNames = names
+			report.Warnings = append(report.Warnings, mgWarns...)
+			fmt.Fprintf(os.Stderr, "Management groups: %d names resolved\n", len(names))
+		}
+	}
+
 	fmt.Fprintln(os.Stderr)
 
 	return report, nil
@@ -243,4 +261,28 @@ func ParseSubscriptions(raw string) []string {
 		parts[i] = strings.TrimSpace(parts[i])
 	}
 	return parts
+}
+
+// extractManagementGroupIDs returns the deduplicated management group IDs
+// referenced in the RBAC assignments' scopes.
+func extractManagementGroupIDs(assignments []rbac.RoleAssignment) []string {
+	seen := make(map[string]bool)
+	var ids []string
+	for _, a := range assignments {
+		if a.ScopeType != "Management Group" {
+			continue
+		}
+		parts := strings.Split(strings.TrimRight(a.Scope, "/"), "/")
+		for i, p := range parts {
+			if p == "managementGroups" && i+1 < len(parts) {
+				id := parts[i+1]
+				if !seen[id] {
+					seen[id] = true
+					ids = append(ids, id)
+				}
+				break
+			}
+		}
+	}
+	return ids
 }

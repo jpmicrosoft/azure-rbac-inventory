@@ -158,6 +158,7 @@ func runCompare(cmd *cobra.Command, args []string) error {
 		IdentityType:          typeFlag,
 		MaxResults:            maxResultsFlag,
 		Concurrency:           concurrencyFlag,
+		LegacyOutput:          legacyOutputFlag,
 	}
 
 	if isModelMode {

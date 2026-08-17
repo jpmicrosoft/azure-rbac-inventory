@@ -4,6 +4,16 @@ import (
 	"testing"
 )
 
+func TestLegacyOutputFlagRegistered(t *testing.T) {
+	flag := rootCmd.PersistentFlags().Lookup("legacy-output")
+	if flag == nil {
+		t.Fatal("--legacy-output flag is not registered")
+	}
+	if flag.DefValue != "false" {
+		t.Errorf("--legacy-output default = %q, want false", flag.DefValue)
+	}
+}
+
 func TestPerIdentityFilename_Basic(t *testing.T) {
 	got := perIdentityFilename("report.csv", "Test User", 0)
 	want := "report-000-Test-User.csv"

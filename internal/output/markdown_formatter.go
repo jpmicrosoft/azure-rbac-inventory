@@ -55,13 +55,25 @@ func writeMarkdownReport(buf *bytes.Buffer, rpt *report.Report) {
 	fmt.Fprintf(buf, "### Azure Role Assignments (%d)\n\n", len(rpt.RBACAssignments))
 	if len(rpt.RBACAssignments) == 0 {
 		buf.WriteString("_No results found._\n\n")
-	} else {
+	} else if rpt.LegacyOutput {
 		buf.WriteString("| Role | Scope | Scope Type | Assignment Type |\n")
 		buf.WriteString("|------|-------|------------|-----------------|\n")
 		for _, a := range rpt.RBACAssignments {
 			fmt.Fprintf(buf, "| %s | %s | %s | %s |\n",
 				escapeMarkdown(a.RoleName),
 				escapeMarkdown(a.Scope),
+				escapeMarkdown(a.ScopeType),
+				escapeMarkdown(a.AssignmentType))
+		}
+		buf.WriteString("\n")
+	} else {
+		buf.WriteString("| Role | Scope | Scope Name | Scope Type | Assignment Type |\n")
+		buf.WriteString("|------|-------|------------|------------|-----------------|\n")
+		for _, a := range rpt.RBACAssignments {
+			fmt.Fprintf(buf, "| %s | %s | %s | %s | %s |\n",
+				escapeMarkdown(a.RoleName),
+				escapeMarkdown(a.Scope),
+				escapeMarkdown(managementGroupScopeName(a.Scope, a.ScopeType, rpt.ManagementGroupNames)),
 				escapeMarkdown(a.ScopeType),
 				escapeMarkdown(a.AssignmentType))
 		}

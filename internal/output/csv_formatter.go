@@ -14,8 +14,10 @@ var csvBOM = []byte{0xEF, 0xBB, 0xBF}
 var csvHeader = []string{
 	"Identity", "ObjectID", "IdentityType", "Cloud",
 	"Category", "Name", "Scope", "ScopeType",
-	"Detail", "Status", "AssignmentType",
+	"Detail", "Status", "AssignmentType", "ScopeName",
 }
+
+var legacyCSVHeader = csvHeader[:len(csvHeader)-1]
 
 // CSVFormatter implements the Formatter interface for CSV output.
 type CSVFormatter struct{}
@@ -53,7 +55,12 @@ func (f *CSVFormatter) FormatMultiReport(reports []*report.Report) ([]byte, erro
 	buf.Write(csvBOM)
 
 	w := csv.NewWriter(&buf)
-	if err := w.Write(csvHeader); err != nil {
+	legacy := reportsUseLegacyOutput(reports)
+	header := csvHeader
+	if legacy {
+		header = legacyCSVHeader
+	}
+	if err := w.Write(header); err != nil {
 		return nil, err
 	}
 
@@ -64,51 +71,71 @@ func (f *CSVFormatter) FormatMultiReport(reports []*report.Report) ([]byte, erro
 		cloud := rpt.Cloud
 
 		for _, a := range rpt.RBACAssignments {
-			if err := w.Write(sanitizeCSVRow([]string{
+			row := []string{
 				name, objectID, idType, cloud,
 				"RBAC", a.RoleName, a.Scope, a.ScopeType,
 				a.PrincipalType, "", a.AssignmentType,
-			})); err != nil {
+			}
+			if !legacy {
+				row = append(row, managementGroupScopeName(a.Scope, a.ScopeType, rpt.ManagementGroupNames))
+			}
+			if err := w.Write(sanitizeCSVRow(row)); err != nil {
 				return nil, err
 			}
 		}
 
 		for _, r := range rpt.DirectoryRoles {
-			if err := w.Write(sanitizeCSVRow([]string{
+			row := []string{
 				name, objectID, idType, cloud,
 				"DirectoryRole", r.RoleName, "", "",
 				r.RoleID, r.Status, "",
-			})); err != nil {
+			}
+			if !legacy {
+				row = append(row, "")
+			}
+			if err := w.Write(sanitizeCSVRow(row)); err != nil {
 				return nil, err
 			}
 		}
 
 		for _, p := range rpt.AccessPackages {
-			if err := w.Write(sanitizeCSVRow([]string{
+			row := []string{
 				name, objectID, idType, cloud,
 				"AccessPackage", p.PackageName, "", "",
 				p.CatalogName, p.Status, p.ExpirationDate,
-			})); err != nil {
+			}
+			if !legacy {
+				row = append(row, "")
+			}
+			if err := w.Write(sanitizeCSVRow(row)); err != nil {
 				return nil, err
 			}
 		}
 
 		for _, r := range rpt.AccessRequests {
-			if err := w.Write(sanitizeCSVRow([]string{
+			row := []string{
 				name, objectID, idType, cloud,
 				"AccessPackageRequest", r.PackageName, "", "",
 				r.RequestType, r.Status, r.CreatedDate,
-			})); err != nil {
+			}
+			if !legacy {
+				row = append(row, "")
+			}
+			if err := w.Write(sanitizeCSVRow(row)); err != nil {
 				return nil, err
 			}
 		}
 
 		for _, g := range rpt.GroupMemberships {
-			if err := w.Write(sanitizeCSVRow([]string{
+			row := []string{
 				name, objectID, idType, cloud,
 				"GroupMembership", g.GroupName, "", "",
 				g.GroupType, "", g.Membership,
-			})); err != nil {
+			}
+			if !legacy {
+				row = append(row, "")
+			}
+			if err := w.Write(sanitizeCSVRow(row)); err != nil {
 				return nil, err
 			}
 		}
@@ -119,6 +146,10 @@ func (f *CSVFormatter) FormatMultiReport(reports []*report.Report) ([]byte, erro
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+func reportsUseLegacyOutput(reports []*report.Report) bool {
+	return len(reports) > 0 && reports[0] != nil && reports[0].LegacyOutput
 }
 
 // FileExtension returns ".csv".
