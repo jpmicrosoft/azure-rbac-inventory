@@ -529,7 +529,8 @@ go test -race ./... -count=1
 ```
 
 > **Note:** The `-race` flag requires CGO and is not available on all platforms (e.g., `windows/arm64`).
-> Race detection is recommended to run in CI on `linux/amd64` where CGO is available by default.
+> CI runs race detection on its Linux, Windows, and macOS runners. Developers on `windows/arm64` should
+> rely on CI for this gate.
 
 ## Build from Source
 
@@ -539,9 +540,7 @@ Requires Go 1.26+.
 # Build for current platform
 go build -o azure-rbac-inventory.exe .
 
-# Cross-compile for all platforms (requires make)
-# NOTE: The Makefile uses Windows cmd.exe syntax (set GOOS=...).
-# On Linux/macOS, use standard env vars instead: GOOS=linux GOARCH=amd64 go build ...
+# Cross-compile for all platforms (requires make and a Unix-like shell)
 make all
 
 # Outputs in dist/:
@@ -767,6 +766,8 @@ The tool warns and falls back to non-workload comparison for that specific targe
 - **Output encoding** — Terminal reports render control and bidirectional formatting characters visibly to prevent display spoofing. HTML reports use contextual template escaping.
 - **Network** — All API calls use HTTPS. The tool validates pagination URLs to prevent token theft via malicious redirect.
 
+For supported versions, the project threat model, secure operation guidance, and private vulnerability reporting instructions, see [`SECURITY.md`](SECURITY.md).
+
 ## Example Output
 
 ```
@@ -813,6 +814,13 @@ The tool warns and falls back to non-workload comparison for that specific targe
     DevOps-Team                    Security           Direct
     All-Engineers                  Microsoft 365      Transitive
 ```
+
+## Project Documents
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — development setup, required checks, review expectations, and release workflow.
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — participation and enforcement expectations.
+- [`SECURITY.md`](SECURITY.md) — supported versions, security model, operational guidance, and vulnerability reporting.
+- [`CHANGELOG.md`](CHANGELOG.md) — release history in Keep a Changelog format.
 
 ## License
 
